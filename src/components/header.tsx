@@ -14,7 +14,10 @@ export function Header() {
     <header className="border-b border-border bg-card">
       <div className="container mx-auto px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-6">
-          <Link href="/" className="font-semibold text-lg">WFH Planner</Link>
+          <Link href="/" className="flex items-center gap-2 font-semibold text-lg">
+            <img src="/favicon.png" alt="WFH Planner" width={28} height={28} className="rounded" />
+            WFH Planner
+          </Link>
           <nav className="flex items-center gap-1">
             <Link href="/" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-colors">
               <Home className="h-4 w-4" />Dashboard
