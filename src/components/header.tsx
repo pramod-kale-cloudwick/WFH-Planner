@@ -14,18 +14,18 @@ export function Header() {
     <header className="border-b border-border bg-card">
       <div className="container mx-auto px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-6">
-          <Link href="/" className="flex items-center gap-2 font-semibold text-lg">
-            <img src="/favicon.png" alt="WFH Planner" width={28} height={28} className="rounded" />
+          <Link href="/" className="flex items-center gap-2 font-semibold text-lg transition-opacity duration-200 hover:opacity-80">
+            <img src="/favicon.png" alt="WFH Planner" width={28} height={28} className="rounded transition-transform duration-200 hover:scale-110" />
             WFH Planner
           </Link>
           <nav className="flex items-center gap-1">
-            <Link href="/" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-colors">
+            <Link href="/" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
               <Home className="h-4 w-4" />Dashboard
             </Link>
-            <Link href="/employees" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-colors">
+            <Link href="/employees" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
               <Users className="h-4 w-4" />Employees
             </Link>
-            <Link href="/settings" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-colors">
+            <Link href="/settings" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
               <Settings className="h-4 w-4" />Settings
             </Link>
           </nav>

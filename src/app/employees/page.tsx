@@ -82,7 +82,7 @@ export default function EmployeesPage() {
               </TableHeader>
               <TableBody>
                 {employees.map((emp, idx) => (
-                  <TableRow key={emp.id}>
+                  <TableRow key={emp.id} className="transition-colors duration-200">
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMove(emp.id, "up")} disabled={idx === 0}><ArrowUp className="h-3 w-3" /></Button>

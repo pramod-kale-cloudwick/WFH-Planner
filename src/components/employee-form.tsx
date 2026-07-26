@@ -61,8 +61,8 @@ export function EmployeeForm({ onSuccess, initialData, mode = "button" }: Employ
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
       <DialogTrigger
         className={mode === "inline"
-          ? "flex items-center gap-2 px-2 py-1.5 text-sm w-full rounded-md hover:bg-accent transition-colors cursor-pointer"
-          : "inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/80 transition-colors"
+          ? "flex items-center gap-2 px-2 py-1.5 text-sm w-full rounded-md hover:bg-accent transition-all duration-200 cursor-pointer active:scale-95"
+          : "inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/80 transition-all duration-200 hover:scale-105 active:scale-95"
         }
       >
         {initialData ? (
@@ -113,7 +113,7 @@ export function EmployeeForm({ onSuccess, initialData, mode = "button" }: Employ
                 <Badge
                   key={day.value}
                   variant={fixedDays.includes(day.value) ? "default" : "outline"}
-                  className="cursor-pointer select-none"
+                  className="cursor-pointer select-none transition-all duration-200 hover:scale-105 active:scale-95"
                   onClick={() => toggleDay(day.value)}
                 >
                   {day.label}
