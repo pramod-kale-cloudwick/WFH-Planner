@@ -1,6 +1,6 @@
 import { startOfWeek, endOfWeek, addWeeks, format, parseISO } from "date-fns";
 import { db } from "./db";
-import { employees, weekAllocations, allocationEmployees, settings } from "./schema";
+import { employees, weekAllocations, allocationEmployees, settings, swapHistory } from "./schema";
 import { eq, and, asc, gte, lte } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Employee, WeekAllocation, Settings } from "@/types";
@@ -72,7 +72,14 @@ export async function getAllocationsForMonth(year: number, month: number): Promi
       const emp = await db.select().from(employees).where(eq(employees.id, empId));
       if (emp.length > 0) allEmps.push(emp[0] as unknown as Employee);
     }
-    result.push({ id: alloc.id, weekStart: parseISO(alloc.weekStart), weekEnd: parseISO(alloc.weekEnd), weekNumber: alloc.weekNumber, isOverride: alloc.isOverride, createdAt: alloc.createdAt, employees: allEmps });
+    const swaps = await db.select().from(swapHistory).where(eq(swapHistory.allocationId, alloc.id));
+    const swapDetails: { fromName: string; toName: string }[] = [];
+    for (const swap of swaps) {
+      const fromEmp = await db.select().from(employees).where(eq(employees.id, swap.fromEmployeeId));
+      const toEmp = await db.select().from(employees).where(eq(employees.id, swap.toEmployeeId));
+      if (fromEmp.length && toEmp.length) swapDetails.push({ fromName: fromEmp[0].name, toName: toEmp[0].name });
+    }
+    result.push({ id: alloc.id, weekStart: parseISO(alloc.weekStart), weekEnd: parseISO(alloc.weekEnd), weekNumber: alloc.weekNumber, isOverride: alloc.isOverride, createdAt: alloc.createdAt, employees: allEmps, swaps: swapDetails });
   }
   return result;
 }
@@ -82,4 +89,6 @@ export async function swapEmployees(allocationId1: string, employeeId1: string, 
   await db.update(allocationEmployees).set({ employeeId: employeeId1 }).where(and(eq(allocationEmployees.allocationId, allocationId2), eq(allocationEmployees.employeeId, employeeId2)));
   await db.update(weekAllocations).set({ isOverride: true }).where(eq(weekAllocations.id, allocationId1));
   await db.update(weekAllocations).set({ isOverride: true }).where(eq(weekAllocations.id, allocationId2));
+  await db.insert(swapHistory).values({ id: nanoid(), allocationId: allocationId1, fromEmployeeId: employeeId1, toEmployeeId: employeeId2 });
+  await db.insert(swapHistory).values({ id: nanoid(), allocationId: allocationId2, fromEmployeeId: employeeId2, toEmployeeId: employeeId1 });
 }

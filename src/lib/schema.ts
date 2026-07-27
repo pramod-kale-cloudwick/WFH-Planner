@@ -70,6 +70,14 @@ export const settings = sqliteTable("settings", {
   weekCycleLength: integer("week_cycle_length").notNull().default(5),
 });
 
+export const swapHistory = sqliteTable("swap_history", {
+  id: text("id").primaryKey(),
+  allocationId: text("allocation_id").notNull().references(() => weekAllocations.id, { onDelete: "cascade" }),
+  fromEmployeeId: text("from_employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  toEmployeeId: text("to_employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  swappedAt: integer("swapped_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+});
+
 // Relations
 export const employeesRelations = relations(employees, ({ many }) => ({
   allocations: many(allocationEmployees),

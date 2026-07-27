@@ -13,6 +13,11 @@ export interface Employee {
   createdAt: Date;
 }
 
+export interface SwapInfo {
+  fromName: string;
+  toName: string;
+}
+
 export interface WeekAllocation {
   id: string;
   weekStart: Date;
@@ -21,6 +26,7 @@ export interface WeekAllocation {
   isOverride: boolean;
   createdAt: Date;
   employees: Employee[];
+  swaps?: SwapInfo[];
 }
 
 export interface Settings {

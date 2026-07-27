@@ -24,7 +24,7 @@ export function MonthView({ onSwapComplete }: MonthViewProps) {
   const [allocations, setAllocations] = useState<WeekAllocation[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedEmployee, setSelectedEmployee] = useState<{ allocationId: string; employeeId: string } | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<{ allocationId: string; employeeId: string; weekStart: Date } | null>(null);
   const [openWfoWeeks, setOpenWfoWeeks] = useState<Set<string>>(new Set());
 
   const fetchData = useCallback(async () => {
@@ -58,9 +58,9 @@ export function MonthView({ onSwapComplete }: MonthViewProps) {
     return slots;
   }, [currentDate, allocations]);
 
-  const handleEmployeeClick = async (allocationId: string, employee: Employee) => {
+  const handleEmployeeClick = async (allocationId: string, employee: Employee, weekStart: Date) => {
     if (!selectedEmployee) {
-      setSelectedEmployee({ allocationId, employeeId: employee.id });
+      setSelectedEmployee({ allocationId, employeeId: employee.id, weekStart });
       return;
     }
     if (selectedEmployee.allocationId === allocationId && selectedEmployee.employeeId === employee.id) {
@@ -68,7 +68,7 @@ export function MonthView({ onSwapComplete }: MonthViewProps) {
       return;
     }
     if (selectedEmployee.allocationId === allocationId) {
-      setSelectedEmployee({ allocationId, employeeId: employee.id });
+      setSelectedEmployee({ allocationId, employeeId: employee.id, weekStart });
       return;
     }
     try {
