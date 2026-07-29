@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { settings } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { isAdmin } from "@/lib/auth-utils";
 
 export async function GET() {
   try {
@@ -18,6 +19,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
+    if (!(await isAdmin())) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     const body = await request.json();
     const { availableSeats, wfhPerWeek, weekCycleLength } = body;
 

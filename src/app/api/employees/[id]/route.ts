@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { employees } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { isAdmin } from "@/lib/auth-utils";
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    if (!(await isAdmin())) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     const { id } = await params;
     const body = await request.json();
     const { name, designation, wfhType, fixedDays, isActive, rotationOrder } = body;
@@ -27,6 +29,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    if (!(await isAdmin())) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     const { id } = await params;
     const deleted = await db.delete(employees).where(eq(employees.id, id)).returning();
     if (!deleted.length) return NextResponse.json({ error: "Employee not found" }, { status: 404 });

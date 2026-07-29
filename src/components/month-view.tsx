@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSession } from "next-auth/react";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addWeeks, isSameWeek } from "date-fns";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,8 @@ interface WeekSlot {
 }
 
 export function MonthView({ onSwapComplete }: MonthViewProps) {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.isAdmin ?? false;
   const [currentDate, setCurrentDate] = useState(new Date());
   const [allocations, setAllocations] = useState<WeekAllocation[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -110,7 +113,7 @@ export function MonthView({ onSwapComplete }: MonthViewProps) {
           <h2 className="text-xl font-semibold min-w-[160px] text-center transition-opacity duration-300">{format(currentDate, "MMMM yyyy")}</h2>
           <Button variant="outline" size="icon" className="transition-transform duration-200 hover:scale-105 active:scale-95" onClick={() => setCurrentDate(addMonths(currentDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
         </div>
-        <Button onClick={handleGenerate} disabled={loading} className="transition-all duration-200 hover:scale-105 active:scale-95"><RefreshCw className={`h-4 w-4 mr-2 transition-transform duration-500 ${loading ? "animate-spin" : ""}`} />Generate Schedule</Button>
+{isAdmin && <Button onClick={handleGenerate} disabled={loading} className="transition-all duration-200 hover:scale-105 active:scale-95"><RefreshCw className={`h-4 w-4 mr-2 transition-transform duration-500 ${loading ? "animate-spin" : ""}`} />Generate Schedule</Button>}
       </div>
 
       {selectedEmployee && (

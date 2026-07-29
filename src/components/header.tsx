@@ -9,6 +9,7 @@ import { Users, Settings, LogOut, Home } from "lucide-react";
 export function Header() {
   const { data: session } = useSession();
   const initials = session?.user?.name?.split(" ").map((n) => n[0]).join("").toUpperCase() || "U";
+  const isAdmin = session?.user?.isAdmin ?? false;
 
   return (
     <header className="border-b border-border bg-card">
@@ -22,12 +23,16 @@ export function Header() {
             <Link href="/" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
               <Home className="h-4 w-4" />Dashboard
             </Link>
-            <Link href="/employees" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
-              <Users className="h-4 w-4" />Employees
-            </Link>
-            <Link href="/settings" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
-              <Settings className="h-4 w-4" />Settings
-            </Link>
+            {isAdmin && (
+              <>
+                <Link href="/employees" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
+                  <Users className="h-4 w-4" />Employees
+                </Link>
+                <Link href="/settings" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
+                  <Settings className="h-4 w-4" />Settings
+                </Link>
+              </>
+            )}
           </nav>
         </div>
         <DropdownMenu>

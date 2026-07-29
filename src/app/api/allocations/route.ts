@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAllocationsForMonth, generateAllocations } from "@/lib/allocation-engine";
 import { startOfWeek } from "date-fns";
+import { isAdmin } from "@/lib/auth-utils";
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,6 +18,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!(await isAdmin())) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     const body = await request.json();
     const { weeksCount = 20 } = body;
     const startDate = startOfWeek(new Date(), { weekStartsOn: 1 });

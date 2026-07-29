@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { employees } from "@/lib/schema";
 import { asc, max } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { isAdmin } from "@/lib/auth-utils";
 
 export async function GET() {
   try {
@@ -16,6 +17,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!(await isAdmin())) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     const body = await request.json();
     const { name, designation, wfhType, fixedDays } = body;
 

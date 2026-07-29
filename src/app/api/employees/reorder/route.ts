@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { employees } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { isAdmin } from "@/lib/auth-utils";
 
 export async function POST(request: NextRequest) {
   try {
+    if (!(await isAdmin())) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     const body = await request.json();
     const { orderedIds } = body as { orderedIds: string[] };
 
