@@ -8,7 +8,6 @@ export const users = sqliteTable("user", {
   email: text("email").unique(),
   emailVerified: integer("emailVerified", { mode: "timestamp_ms" }),
   image: text("image"),
-  isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
 });
 
 export const accounts = sqliteTable("account", {
@@ -41,11 +40,13 @@ export const verificationTokens = sqliteTable("verificationToken", {
 export const employees = sqliteTable("employees", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  email: text("email"),
   designation: text("designation").notNull(),
   wfhType: text("wfh_type", { enum: ["rotating", "permanent_wfh", "permanent_wfo"] }).notNull().default("rotating"),
   fixedDays: text("fixed_days").default("[]"),
   rotationOrder: integer("rotation_order").notNull().default(0),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 

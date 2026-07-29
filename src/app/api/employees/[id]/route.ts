@@ -9,10 +9,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!(await isAdmin())) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     const { id } = await params;
     const body = await request.json();
-    const { name, designation, wfhType, fixedDays, isActive, rotationOrder } = body;
+    const { name, email, designation, wfhType, fixedDays, isActive, rotationOrder } = body;
 
     const updated = await db.update(employees).set({
       ...(name !== undefined && { name }),
+      ...(email !== undefined && { email: email || null }),
       ...(designation !== undefined && { designation }),
       ...(wfhType !== undefined && { wfhType }),
       ...(fixedDays !== undefined && { fixedDays: JSON.stringify(fixedDays) }),

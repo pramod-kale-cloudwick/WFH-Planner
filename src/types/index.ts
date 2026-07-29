@@ -5,11 +5,13 @@ export type FixedDays = WeekDay[];
 export interface Employee {
   id: string;
   name: string;
+  email?: string;
   designation: string;
   wfhType: WfhType;
   fixedDays: FixedDays;
   rotationOrder: number;
   isActive: boolean;
+  isAdmin: boolean;
   createdAt: Date;
 }
 

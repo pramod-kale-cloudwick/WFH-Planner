@@ -21,7 +21,7 @@ const WEEKDAYS: { value: WeekDay; label: string }[] = [
 
 interface EmployeeFormProps {
   onSuccess: () => void;
-  initialData?: { id: string; name: string; designation: string; wfhType: WfhType; fixedDays: WeekDay[] };
+  initialData?: { id: string; name: string; email?: string; designation: string; wfhType: WfhType; fixedDays: WeekDay[] };
   mode?: "button" | "inline";
 }
 
@@ -29,12 +29,13 @@ export function EmployeeForm({ onSuccess, initialData, mode = "button" }: Employ
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState(initialData?.name || "");
+  const [email, setEmail] = useState(initialData?.email || "");
   const [designation, setDesignation] = useState(initialData?.designation || "");
   const [wfhType, setWfhType] = useState<WfhType>(initialData?.wfhType || "rotating");
   const [fixedDays, setFixedDays] = useState<WeekDay[]>(initialData?.fixedDays || []);
 
   const resetForm = () => {
-    if (!initialData) { setName(""); setDesignation(""); setWfhType("rotating"); setFixedDays([]); }
+    if (!initialData) { setName(""); setEmail(""); setDesignation(""); setWfhType("rotating"); setFixedDays([]); }
   };
 
   const toggleDay = (day: WeekDay) => {
@@ -47,7 +48,7 @@ export function EmployeeForm({ onSuccess, initialData, mode = "button" }: Employ
     try {
       const url = initialData ? `/api/employees/${initialData.id}` : "/api/employees";
       const method = initialData ? "PUT" : "POST";
-      await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, designation, wfhType, fixedDays }) });
+      await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, email, designation, wfhType, fixedDays }) });
       onSuccess();
       setOpen(false);
       resetForm();
@@ -79,6 +80,10 @@ export function EmployeeForm({ onSuccess, initialData, mode = "button" }: Employ
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="John Doe" required />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email <span className="text-muted-foreground text-xs">(for login matching)</span></Label>
+            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="john@company.com" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="designation">Designation</Label>

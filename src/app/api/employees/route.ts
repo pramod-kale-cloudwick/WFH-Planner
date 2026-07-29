@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   try {
     if (!(await isAdmin())) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     const body = await request.json();
-    const { name, designation, wfhType, fixedDays } = body;
+    const { name, email, designation, wfhType, fixedDays } = body;
 
     const maxOrderResult = await db.select({ maxOrder: max(employees.rotationOrder) }).from(employees);
     const nextOrder = (maxOrderResult[0]?.maxOrder ?? -1) + 1;
@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
     const newEmployee = await db.insert(employees).values({
       id: nanoid(),
       name,
+      email: email || null,
       designation,
       wfhType: wfhType || "rotating",
       fixedDays: JSON.stringify(fixedDays || []),
