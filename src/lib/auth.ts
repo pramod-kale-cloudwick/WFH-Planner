@@ -18,6 +18,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = user.id;
         const emp = await db.select().from(employees).where(eq(employees.email, user.email ?? "")).limit(1);
+        session.user.isOnboarded = emp.length > 0;
         session.user.isAdmin = emp[0]?.isAdmin ?? false;
       }
       return session;
