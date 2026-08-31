@@ -1,7 +1,7 @@
 "use client";
 
 import { Header } from "@/components/header";
-import { MonthView } from "@/components/month-view";
+import { CalendarView } from "@/components/calendar-view";
 
 export default function DashboardPage() {
   return (
@@ -12,7 +12,7 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">View and manage weekly WFH schedules</p>
         </div>
-        <MonthView />
+        <CalendarView />
       </main>
     </div>
   );

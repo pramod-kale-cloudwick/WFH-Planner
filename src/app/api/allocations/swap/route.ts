@@ -10,7 +10,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    await swapEmployees(allocationId1, employeeId1, allocationId2, employeeId2);
+    const result = await swapEmployees(allocationId1, employeeId1, allocationId2, employeeId2);
+    if (!result.success) return NextResponse.json({ error: result.error }, { status: 400 });
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "Failed to swap employees" }, { status: 500 });

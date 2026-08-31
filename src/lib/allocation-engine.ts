@@ -31,8 +31,8 @@ export async function generateAllocations(startDate: Date, weeksCount: number): 
   let rotationIndex = 0;
 
   for (let i = 0; i < weeksCount; i++) {
-    const weekStart = startOfWeek(addWeeks(startDate, i), { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+    const weekStart = startOfWeek(addWeeks(startDate, i), { weekStartsOn: 0 });
+    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 0 });
     const weekStartStr = format(weekStart, "yyyy-MM-dd");
     const weekEndStr = format(weekEnd, "yyyy-MM-dd");
 
@@ -58,8 +58,8 @@ export async function generateAllocations(startDate: Date, weeksCount: number): 
 export async function getAllocationsForMonth(year: number, month: number): Promise<WeekAllocation[]> {
   const startDate = new Date(year, month, 1);
   const endDate = new Date(year, month + 1, 0);
-  const startStr = format(startOfWeek(startDate, { weekStartsOn: 1 }), "yyyy-MM-dd");
-  const endStr = format(endOfWeek(endDate, { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const startStr = format(startOfWeek(startDate, { weekStartsOn: 0 }), "yyyy-MM-dd");
+  const endStr = format(endOfWeek(endDate, { weekStartsOn: 0 }), "yyyy-MM-dd");
 
   const allocations = await db.select().from(weekAllocations).where(and(gte(weekAllocations.weekStart, startStr), lte(weekAllocations.weekStart, endStr))).orderBy(asc(weekAllocations.weekStart));
 
@@ -84,11 +84,29 @@ export async function getAllocationsForMonth(year: number, month: number): Promi
   return result;
 }
 
-export async function swapEmployees(allocationId1: string, employeeId1: string, allocationId2: string, employeeId2: string): Promise<void> {
+export async function swapEmployees(allocationId1: string, employeeId1: string, allocationId2: string, employeeId2: string): Promise<{ success: boolean; error?: string }> {
+  // Prevent swapping same employee (would result in duplicate)
+  if (employeeId1 === employeeId2) return { success: false, error: "Cannot swap same employee" };
+
+  // Check if employeeId2 already exists in allocationId1's week
+  const existsInWeek1 = await db.select().from(allocationEmployees).where(and(eq(allocationEmployees.allocationId, allocationId1), eq(allocationEmployees.employeeId, employeeId2))).limit(1);
+  if (existsInWeek1.length > 0) return { success: false, error: "Employee already assigned to this week" };
+
+  // Check if employeeId1 already exists in allocationId2's week
+  const existsInWeek2 = await db.select().from(allocationEmployees).where(and(eq(allocationEmployees.allocationId, allocationId2), eq(allocationEmployees.employeeId, employeeId1))).limit(1);
+  if (existsInWeek2.length > 0) return { success: false, error: "Employee already assigned to target week" };
+
   await db.update(allocationEmployees).set({ employeeId: employeeId2 }).where(and(eq(allocationEmployees.allocationId, allocationId1), eq(allocationEmployees.employeeId, employeeId1)));
   await db.update(allocationEmployees).set({ employeeId: employeeId1 }).where(and(eq(allocationEmployees.allocationId, allocationId2), eq(allocationEmployees.employeeId, employeeId2)));
   await db.update(weekAllocations).set({ isOverride: true }).where(eq(weekAllocations.id, allocationId1));
   await db.update(weekAllocations).set({ isOverride: true }).where(eq(weekAllocations.id, allocationId2));
   await db.insert(swapHistory).values({ id: nanoid(), allocationId: allocationId1, fromEmployeeId: employeeId1, toEmployeeId: employeeId2 });
   await db.insert(swapHistory).values({ id: nanoid(), allocationId: allocationId2, fromEmployeeId: employeeId2, toEmployeeId: employeeId1 });
+  return { success: true };
+}
+
+export async function clearAllocations(): Promise<void> {
+  await db.delete(swapHistory);
+  await db.delete(allocationEmployees);
+  await db.delete(weekAllocations);
 }

@@ -27,6 +27,7 @@ export function MonthView({ onSwapComplete }: MonthViewProps) {
   const [allocations, setAllocations] = useState<WeekAllocation[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [swapping, setSwapping] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<{ allocationId: string; employeeId: string; weekStart: Date } | null>(null);
   const [openWfoWeeks, setOpenWfoWeeks] = useState<Set<string>>(new Set());
 
@@ -74,14 +75,23 @@ export function MonthView({ onSwapComplete }: MonthViewProps) {
       setSelectedEmployee({ allocationId, employeeId: employee.id, weekStart });
       return;
     }
+    setSwapping(true);
     try {
-      await fetch("/api/allocations/swap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ allocationId1: selectedEmployee.allocationId, employeeId1: selectedEmployee.employeeId, allocationId2: allocationId, employeeId2: employee.id }) });
+      const res = await fetch("/api/allocations/swap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ allocationId1: selectedEmployee.allocationId, employeeId1: selectedEmployee.employeeId, allocationId2: allocationId, employeeId2: employee.id }) });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Swap failed");
+        setSelectedEmployee(null);
+        return;
+      }
       setSelectedEmployee(null);
       await fetchData();
       onSwapComplete?.();
       toast.success("Employees swapped");
     } catch {
       toast.error("Swap failed");
+    } finally {
+      setSwapping(false);
     }
   };
 
@@ -117,8 +127,12 @@ export function MonthView({ onSwapComplete }: MonthViewProps) {
       </div>
 
       {selectedEmployee && (
-        <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-2 text-sm animate-in fade-in slide-in-from-top-2 duration-300">
-          Click another employee to swap, or click the same one to deselect.
+        <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-2 text-sm animate-in fade-in slide-in-from-top-2 duration-300 flex items-center gap-2">
+          {swapping ? (
+            <><RefreshCw className="h-4 w-4 animate-spin" />Swapping...</>
+          ) : (
+            "Click another employee to swap, or click the same one to deselect."
+          )}
         </div>
       )}
 
