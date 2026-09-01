@@ -15,6 +15,25 @@ import type { WeekAllocation, Employee, WeekDay, DateAnnotation } from "@/types"
 
 const EMPLOYEE_COLORS = ["bg-blue-500/20 text-blue-300", "bg-green-500/20 text-green-300", "bg-purple-500/20 text-purple-300", "bg-orange-500/20 text-orange-300", "bg-pink-500/20 text-pink-300", "bg-cyan-500/20 text-cyan-300", "bg-yellow-500/20 text-yellow-300", "bg-red-500/20 text-red-300"];
 
+const LOADING_MESSAGES = [
+  "Free tier vibes — our servers are powered by hopes, dreams, and zero budget.",
+  "Patience, grasshopper. Free hosting means our hamsters need coffee breaks.",
+  "Loading at the speed of free tier. Good things come to those who wait (and don't pay).",
+  "Our servers run on free credits and good intentions. Almost there...",
+  "Budget hosting moment — pretend it's 2005 dial-up for the nostalgia.",
+  "Fun fact: you're awesome. Also, our servers are waking up from a nap.",
+  "Plot twist: the loading screen is the friends we made along the way.",
+  "Roses are red, servers are slow, free tier limits? That's how it goes.",
+  "You're doing great today. Our database? Not so much. Hang tight.",
+  "Remember: you chose WFH life, and WFH life chose you. Loading...",
+  "Pro tip: grab a coffee. By the time you're back, we might be done.",
+  "You're literally the reason this app exists. Thanks for being patient!",
+  "Somewhere, a free-tier server just woke up and chose to serve you.",
+  "Your patience level: legendary. Our server speed: questionable.",
+  "Take a deep breath. You've handled worse Mondays than this loading screen.",
+  "You're crushing it this week. Just like we're crushing these free CPU limits.",
+];
+
 interface CalendarViewProps {
   onSwapComplete?: () => void;
 }
@@ -31,6 +50,21 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
   const [selectedEmployee, setSelectedEmployee] = useState<{ allocationId: string; employeeId: string; weekStart: Date } | null>(null);
   const [newAnnotation, setNewAnnotation] = useState("");
   const [savingAnnotation, setSavingAnnotation] = useState(false);
+  const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    const last = parseInt(localStorage.getItem("loadingMsgIndex") || "-1", 10);
+    setLoadingMsgIndex((last + 1) % LOADING_MESSAGES.length);
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!loading || !hydrated) return;
+    localStorage.setItem("loadingMsgIndex", String(loadingMsgIndex));
+    const interval = setInterval(() => setLoadingMsgIndex((i) => { const next = (i + 1) % LOADING_MESSAGES.length; localStorage.setItem("loadingMsgIndex", String(next)); return next; }), 3000);
+    return () => clearInterval(interval);
+  }, [loading, hydrated, loadingMsgIndex]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -190,7 +224,11 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
       </div>
 
       {loading ? (
-        <div className="h-96 bg-card animate-pulse rounded-lg" />
+        <div className="h-96 bg-card animate-pulse rounded-lg flex items-center justify-center">
+          <p className="text-sm text-foreground/70 text-center px-8 italic animate-in fade-in duration-500" key={loadingMsgIndex}>
+            {LOADING_MESSAGES[loadingMsgIndex]}
+          </p>
+        </div>
       ) : (
         <div className="border rounded-lg overflow-hidden">
           <div className="grid grid-cols-7 bg-muted/50">
