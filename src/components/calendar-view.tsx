@@ -220,8 +220,8 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
                       <div className={cn("text-sm font-semibold mb-1", !isCurrentMonth && "text-muted-foreground/50", weekend && "text-muted-foreground/40")}>
                         {format(day, "d")}
                       </div>
-                      {!weekend && isCurrentMonth && (
-                        <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+                      {!weekend && isCurrentMonth && wfhEmps.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
                           {wfhEmps.map((emp) => {
                             const isSelected = selectedEmployee?.allocationId === allocation?.id && selectedEmployee?.employeeId === emp.id;
                             return (
