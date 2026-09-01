@@ -130,8 +130,8 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
         </div>
         {isAdmin && (
           <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button disabled={loading} className="transition-all duration-200 hover:scale-105 active:scale-95"><RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />Generate Schedule</Button>
+            <AlertDialogTrigger disabled={loading} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 disabled:pointer-events-none disabled:opacity-50">
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />Generate Schedule
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
