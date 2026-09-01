@@ -6,6 +6,7 @@ import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, en
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WeekAllocation, Employee, WeekDay } from "@/types";
@@ -127,7 +128,23 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
           <Button variant="outline" size="icon" className="transition-transform duration-200 hover:scale-105 active:scale-95" onClick={() => setCurrentDate(addMonths(currentDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
           {!isSameMonth(currentDate, today) && <Button variant="outline" size="sm" className="ml-2 transition-all duration-200 hover:scale-105 active:scale-95" onClick={() => setCurrentDate(new Date())}><CalendarDays className="h-4 w-4 mr-1" />Today</Button>}
         </div>
-        {isAdmin && <Button onClick={handleGenerate} disabled={loading} className="transition-all duration-200 hover:scale-105 active:scale-95"><RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />Generate Schedule</Button>}
+        {isAdmin && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button disabled={loading} className="transition-all duration-200 hover:scale-105 active:scale-95"><RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />Generate Schedule</Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Generate new schedule?</AlertDialogTitle>
+                <AlertDialogDescription>This will create WFH allocations for upcoming weeks. Existing future allocations may be affected.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleGenerate}>Generate</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       {selectedEmployee && (
@@ -169,7 +186,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
                         const isSelected = selectedEmployee?.allocationId === allocation?.id && selectedEmployee?.employeeId === emp.id;
                         return (
                           <Badge key={emp.id} variant="secondary" className={cn("text-[10px] px-1.5 py-0 cursor-pointer transition-all duration-150", employeeColorMap.get(emp.id), isSelected && "ring-2 ring-primary ring-offset-1 ring-offset-background", isPastWeek && "opacity-50 cursor-not-allowed")} onClick={() => !isPastWeek && handleEmployeeClick(day, emp)}>
-                            {emp.name.split(" ")[0]}
+                            {emp.name}
                           </Badge>
                         );
                       })}
@@ -183,14 +200,12 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
       )}
 
       <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-4">
-        <div className="flex items-center gap-4">
-          {rotatingEmployees.slice(0, 6).map((emp) => (
-            <div key={emp.id} className="flex items-center gap-1.5">
-              <span className={cn("w-2.5 h-2.5 rounded-full", employeeColorMap.get(emp.id)?.replace("text-", "bg-").replace("/20", ""))} />
-              <span>{emp.name.split(" ")[0]}</span>
-            </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {rotatingEmployees.map((emp) => (
+            <Badge key={emp.id} variant="secondary" className={cn("text-[10px] px-1.5 py-0", employeeColorMap.get(emp.id))}>
+              {emp.name}
+            </Badge>
           ))}
-          {rotatingEmployees.length > 6 && <span>+{rotatingEmployees.length - 6} more</span>}
         </div>
         <span>Showing WFH schedule for {format(currentDate, "MMMM yyyy")} (Mon – Fri)</span>
       </div>

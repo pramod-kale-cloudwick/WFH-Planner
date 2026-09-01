@@ -6,6 +6,7 @@ import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, en
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { WeekCard } from "./week-card";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import type { WeekAllocation, Employee, WeekDay } from "@/types";
 
@@ -123,7 +124,23 @@ export function MonthView({ onSwapComplete }: MonthViewProps) {
           <h2 className="text-xl font-semibold min-w-[160px] text-center transition-opacity duration-300">{format(currentDate, "MMMM yyyy")}</h2>
           <Button variant="outline" size="icon" className="transition-transform duration-200 hover:scale-105 active:scale-95" onClick={() => setCurrentDate(addMonths(currentDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
         </div>
-{isAdmin && <Button onClick={handleGenerate} disabled={loading} className="transition-all duration-200 hover:scale-105 active:scale-95"><RefreshCw className={`h-4 w-4 mr-2 transition-transform duration-500 ${loading ? "animate-spin" : ""}`} />Generate Schedule</Button>}
+{isAdmin && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button disabled={loading} className="transition-all duration-200 hover:scale-105 active:scale-95"><RefreshCw className={`h-4 w-4 mr-2 transition-transform duration-500 ${loading ? "animate-spin" : ""}`} />Generate Schedule</Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Generate new schedule?</AlertDialogTitle>
+                <AlertDialogDescription>This will create WFH allocations for upcoming weeks. Existing future allocations may be affected.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleGenerate}>Generate</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       {selectedEmployee && (
