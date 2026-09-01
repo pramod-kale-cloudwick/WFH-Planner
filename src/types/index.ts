@@ -53,3 +53,12 @@ export interface WeekCardData {
   wfoCount: number;
   isOverride: boolean;
 }
+
+export interface DateAnnotation {
+  id: string;
+  date: string;
+  message: string;
+  authorId: string;
+  authorName: string;
+  createdAt: Date;
+}

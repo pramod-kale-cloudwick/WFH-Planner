@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
@@ -12,11 +13,13 @@ import { RefreshCw, Save } from "lucide-react";
 import type { Settings, Employee } from "@/types";
 
 export default function SettingsPage() {
+  const { data: session } = useSession();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const isAdmin = session?.user?.isAdmin ?? false;
 
   const fetchData = useCallback(async () => {
     const [settingsRes, empRes] = await Promise.all([fetch("/api/settings"), fetch("/api/employees")]);
@@ -61,7 +64,7 @@ export default function SettingsPage() {
       <main className="flex-1 container mx-auto px-4 py-6 max-w-2xl">
         <div className="mb-6">
           <h1 className="text-2xl font-bold">Settings</h1>
-          <p className="text-muted-foreground">Configure WFH allocation parameters</p>
+          <p className="text-muted-foreground">{isAdmin ? "Configure WFH allocation parameters" : "View WFH allocation parameters (admin-only editing)"}</p>
         </div>
 
         <div className="space-y-6">
@@ -74,11 +77,11 @@ export default function SettingsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="seats">Available Office Seats</Label>
-                  <Input id="seats" type="number" min={1} value={settings.availableSeats} onChange={(e) => setSettings({ ...settings, availableSeats: parseInt(e.target.value) || 1 })} />
+                  <Input id="seats" type="number" min={1} value={settings.availableSeats} onChange={(e) => setSettings({ ...settings, availableSeats: parseInt(e.target.value) || 1 })} disabled={!isAdmin} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="cycle">Week Cycle Length</Label>
-                  <Input id="cycle" type="number" min={1} max={10} value={settings.weekCycleLength} onChange={(e) => setSettings({ ...settings, weekCycleLength: parseInt(e.target.value) || 1 })} />
+                  <Input id="cycle" type="number" min={1} max={10} value={settings.weekCycleLength} onChange={(e) => setSettings({ ...settings, weekCycleLength: parseInt(e.target.value) || 1 })} disabled={!isAdmin} />
                 </div>
               </div>
 
@@ -102,10 +105,12 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <div className="flex gap-4">
-            <Button onClick={handleSave} disabled={saving}><Save className="h-4 w-4 mr-2" />{saving ? "Saving..." : "Save Settings"}</Button>
-            <Button variant="outline" onClick={handleRegenerate} disabled={regenerating}><RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? "animate-spin" : ""}`} />{regenerating ? "Regenerating..." : "Regenerate Schedule"}</Button>
-          </div>
+          {isAdmin && (
+            <div className="flex gap-4">
+              <Button onClick={handleSave} disabled={saving}><Save className="h-4 w-4 mr-2" />{saving ? "Saving..." : "Save Settings"}</Button>
+              <Button variant="outline" onClick={handleRegenerate} disabled={regenerating}><RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? "animate-spin" : ""}`} />{regenerating ? "Regenerating..." : "Regenerate Schedule"}</Button>
+            </div>
+          )}
 
           <Card>
             <CardHeader>

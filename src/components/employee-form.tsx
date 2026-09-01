@@ -23,9 +23,10 @@ interface EmployeeFormProps {
   onSuccess: () => void;
   initialData?: { id: string; name: string; email?: string; designation: string; wfhType: WfhType; fixedDays: WeekDay[] };
   mode?: "button" | "inline";
+  isSelfEdit?: boolean;
 }
 
-export function EmployeeForm({ onSuccess, initialData, mode = "button" }: EmployeeFormProps) {
+export function EmployeeForm({ onSuccess, initialData, mode = "button", isSelfEdit = false }: EmployeeFormProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState(initialData?.name || "");
@@ -67,24 +68,26 @@ export function EmployeeForm({ onSuccess, initialData, mode = "button" }: Employ
         }
       >
         {initialData ? (
-          <><Pencil className="h-4 w-4" />Edit</>
+          <><Pencil className="h-4 w-4" />{isSelfEdit ? "Edit Profile" : "Edit"}</>
         ) : (
           <><Plus className="h-4 w-4" />Add Employee</>
         )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{initialData ? "Edit Employee" : "Add Employee"}</DialogTitle>
+          <DialogTitle>{initialData ? (isSelfEdit ? "Edit Your Profile" : "Edit Employee") : "Add Employee"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="John Doe" required />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Email <span className="text-muted-foreground text-xs">(for login matching)</span></Label>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="john@company.com" />
-          </div>
+          {!isSelfEdit && (
+            <div className="space-y-2">
+              <Label htmlFor="email">Email <span className="text-muted-foreground text-xs">(for login matching)</span></Label>
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="john@company.com" />
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="designation">Designation</Label>
             <Input id="designation" value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="Software Engineer" required />

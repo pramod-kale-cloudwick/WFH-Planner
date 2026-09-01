@@ -7,9 +7,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays, MessageCircle, X, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { WeekAllocation, Employee, WeekDay } from "@/types";
+import type { WeekAllocation, Employee, WeekDay, DateAnnotation } from "@/types";
 
 const EMPLOYEE_COLORS = ["bg-blue-500/20 text-blue-300", "bg-green-500/20 text-green-300", "bg-purple-500/20 text-purple-300", "bg-orange-500/20 text-orange-300", "bg-pink-500/20 text-pink-300", "bg-cyan-500/20 text-cyan-300", "bg-yellow-500/20 text-yellow-300", "bg-red-500/20 text-red-300"];
 
@@ -23,19 +25,28 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [allocations, setAllocations] = useState<WeekAllocation[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [annotations, setAnnotations] = useState<DateAnnotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [swapping, setSwapping] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<{ allocationId: string; employeeId: string; weekStart: Date } | null>(null);
+  const [newAnnotation, setNewAnnotation] = useState("");
+  const [savingAnnotation, setSavingAnnotation] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [allocRes, empRes] = await Promise.all([
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const calStart = startOfWeek(monthStart, { weekStartsOn: 0 });
+    const calEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
+    const [allocRes, empRes, annotRes] = await Promise.all([
       fetch(`/api/allocations?year=${currentDate.getFullYear()}&month=${currentDate.getMonth()}`),
       fetch("/api/employees"),
+      fetch(`/api/annotations?startDate=${format(calStart, "yyyy-MM-dd")}&endDate=${format(calEnd, "yyyy-MM-dd")}`),
     ]);
-    const [allocData, empData] = await Promise.all([allocRes.json(), empRes.json()]);
+    const [allocData, empData, annotData] = await Promise.all([allocRes.json(), empRes.json(), annotRes.json()]);
     setAllocations(allocData.map((a: WeekAllocation) => ({ ...a, weekStart: new Date(a.weekStart), weekEnd: new Date(a.weekEnd) })));
     setEmployees(empData);
+    setAnnotations(annotData);
     setLoading(false);
   }, [currentDate]);
 
@@ -64,6 +75,33 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
     return allocations.find((a) => isSameWeek(day, a.weekStart, { weekStartsOn: 0 })) || null;
   }, [allocations]);
 
+  const getAnnotationsForDay = useCallback((day: Date): DateAnnotation[] => {
+    const dateStr = format(day, "yyyy-MM-dd");
+    return annotations.filter((a) => a.date === dateStr);
+  }, [annotations]);
+
+  const handleAddAnnotation = async (day: Date) => {
+    if (!newAnnotation.trim()) return;
+    setSavingAnnotation(true);
+    try {
+      const res = await fetch("/api/annotations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: format(day, "yyyy-MM-dd"), message: newAnnotation.trim() }) });
+      if (!res.ok) { toast.error("Failed to add note"); return; }
+      const data = await res.json();
+      setAnnotations((prev) => [...prev, data]);
+      setNewAnnotation("");
+      toast.success("Note added");
+    } catch { toast.error("Failed to add note"); } finally { setSavingAnnotation(false); }
+  };
+
+  const handleDeleteAnnotation = async (id: string) => {
+    try {
+      const res = await fetch(`/api/annotations/${id}`, { method: "DELETE" });
+      if (!res.ok) { toast.error("Failed to delete note"); return; }
+      setAnnotations((prev) => prev.filter((a) => a.id !== id));
+      toast.success("Note deleted");
+    } catch { toast.error("Failed to delete note"); }
+  };
+
   const handleEmployeeClick = async (day: Date, employee: Employee) => {
     if (isWeekend(day)) return;
     const allocation = getAllocationForDay(day);
@@ -76,32 +114,36 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
 
     if (!selectedEmployee) {
       setSelectedEmployee({ allocationId: allocation.id, employeeId: employee.id, weekStart: startOfWeek(day, { weekStartsOn: 0 }) });
+      toast.info(`Selected ${employee.name}. Click another employee to swap, or same to deselect.`, { id: "swap-hint", duration: Infinity });
       return;
     }
     if (selectedEmployee.allocationId === allocation.id && selectedEmployee.employeeId === employee.id) {
       setSelectedEmployee(null);
+      toast.dismiss("swap-hint");
       return;
     }
     if (selectedEmployee.allocationId === allocation.id) {
       setSelectedEmployee({ allocationId: allocation.id, employeeId: employee.id, weekStart: startOfWeek(day, { weekStartsOn: 0 }) });
+      toast.info(`Selected ${employee.name}. Click another employee to swap, or same to deselect.`, { id: "swap-hint", duration: Infinity });
       return;
     }
 
+    toast.loading("Swapping...", { id: "swap-hint" });
     setSwapping(true);
     try {
       const res = await fetch("/api/allocations/swap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ allocationId1: selectedEmployee.allocationId, employeeId1: selectedEmployee.employeeId, allocationId2: allocation.id, employeeId2: employee.id }) });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error || "Swap failed");
+        toast.error(data.error || "Swap failed", { id: "swap-hint" });
         setSelectedEmployee(null);
         return;
       }
       setSelectedEmployee(null);
       await fetchData();
       onSwapComplete?.();
-      toast.success("Employees swapped");
+      toast.success("Employees swapped", { id: "swap-hint" });
     } catch {
-      toast.error("Swap failed");
+      toast.error("Swap failed", { id: "swap-hint" });
     } finally {
       setSwapping(false);
     }
@@ -147,12 +189,6 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
         )}
       </div>
 
-      {selectedEmployee && (
-        <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-2 text-sm animate-in fade-in slide-in-from-top-2 duration-300 flex items-center gap-2">
-          {swapping ? <><RefreshCw className="h-4 w-4 animate-spin" />Swapping...</> : "Click another employee to swap, or click the same one to deselect."}
-        </div>
-      )}
-
       {loading ? (
         <div className="h-96 bg-card animate-pulse rounded-lg" />
       ) : (
@@ -174,25 +210,57 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
               const currentWeekStart = startOfWeek(today, { weekStartsOn: 0 });
               const dayWeekStart = startOfWeek(day, { weekStartsOn: 0 });
               const isPastWeek = isBefore(dayWeekStart, currentWeekStart);
+              const dayAnnotations = getAnnotationsForDay(day);
+              const hasAnnotations = dayAnnotations.length > 0;
 
               return (
-                <div key={day.toISOString()} className={cn("min-h-24 border-t border-l p-1.5 transition-colors", !isCurrentMonth && "bg-muted/30", weekend && "bg-muted/20", isToday && "ring-2 ring-primary ring-inset")}>
-                  <div className={cn("text-xs font-medium mb-1", !isCurrentMonth && "text-muted-foreground/50", weekend && "text-muted-foreground/40")}>
-                    {format(day, "d")}
-                  </div>
-                  {!weekend && isCurrentMonth && (
-                    <div className="flex flex-wrap gap-1">
-                      {wfhEmps.map((emp) => {
-                        const isSelected = selectedEmployee?.allocationId === allocation?.id && selectedEmployee?.employeeId === emp.id;
-                        return (
-                          <Badge key={emp.id} variant="secondary" className={cn("text-[10px] px-1.5 py-0 cursor-pointer transition-all duration-150", employeeColorMap.get(emp.id), isSelected && "ring-2 ring-primary ring-offset-1 ring-offset-background", isPastWeek && "opacity-50 cursor-not-allowed")} onClick={() => !isPastWeek && handleEmployeeClick(day, emp)}>
-                            {emp.name}
-                          </Badge>
-                        );
-                      })}
-                    </div>
+                <Popover key={day.toISOString()}>
+                  <PopoverTrigger disabled={!isCurrentMonth} className={cn("min-h-24 border-t border-l p-1.5 transition-all duration-200 relative cursor-pointer text-left", !isCurrentMonth && "bg-muted/30 cursor-default", weekend && "bg-muted/20", isToday && "ring-2 ring-primary ring-inset", isCurrentMonth && !weekend && "hover:bg-muted/40 hover:shadow-inner", isCurrentMonth && weekend && "hover:bg-muted/30")}>
+                      {hasAnnotations && <MessageCircle className="absolute top-1 right-1 h-3.5 w-3.5 text-yellow-400" fill="currentColor" />}
+                      <div className={cn("text-sm font-semibold mb-1", !isCurrentMonth && "text-muted-foreground/50", weekend && "text-muted-foreground/40")}>
+                        {format(day, "d")}
+                      </div>
+                      {!weekend && isCurrentMonth && (
+                        <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+                          {wfhEmps.map((emp) => {
+                            const isSelected = selectedEmployee?.allocationId === allocation?.id && selectedEmployee?.employeeId === emp.id;
+                            return (
+                              <Badge key={emp.id} variant="secondary" className={cn("text-[10px] px-1.5 py-0 cursor-pointer transition-all duration-150", employeeColorMap.get(emp.id), isSelected && "ring-2 ring-primary ring-offset-1 ring-offset-background", isPastWeek && "opacity-50 cursor-not-allowed")} onClick={(e) => { e.stopPropagation(); !isPastWeek && handleEmployeeClick(day, emp); }}>
+                                {emp.name}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      )}
+                  </PopoverTrigger>
+                  {isCurrentMonth && (
+                    <PopoverContent className="w-72 p-3" align="start">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{format(day, "MMM d, yyyy")}</span>
+                          <Badge variant="outline" className="text-[10px]">{dayAnnotations.length} note{dayAnnotations.length !== 1 ? "s" : ""}</Badge>
+                        </div>
+                        {dayAnnotations.length > 0 && (
+                          <div className="space-y-2 max-h-40 overflow-y-auto">
+                            {dayAnnotations.map((ann) => (
+                              <div key={ann.id} className="bg-muted/50 rounded-md p-2 text-sm group relative">
+                                <p className="pr-5">{ann.message}</p>
+                                <p className="text-[10px] text-muted-foreground mt-1">— {ann.authorName}</p>
+                                <button onClick={() => handleDeleteAnnotation(ann.id)} className="absolute top-1 right-1 p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-destructive/20 text-destructive transition-all"><X className="h-3 w-3" /></button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <Input placeholder="Add a note..." value={newAnnotation} onChange={(e) => setNewAnnotation(e.target.value)} className="h-8 text-sm" onKeyDown={(e) => e.key === "Enter" && handleAddAnnotation(day)} />
+                          <Button size="icon" className="h-8 w-8 shrink-0" onClick={() => handleAddAnnotation(day)} disabled={savingAnnotation || !newAnnotation.trim()}>
+                            <Send className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </PopoverContent>
                   )}
-                </div>
+                </Popover>
               );
             })}
           </div>

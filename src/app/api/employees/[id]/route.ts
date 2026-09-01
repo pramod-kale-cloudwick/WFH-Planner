@@ -3,11 +3,21 @@ import { db } from "@/lib/db";
 import { employees } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth-utils";
+import { auth } from "@/lib/auth";
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    if (!(await isAdmin())) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+    const session = await auth();
+    const admin = await isAdmin();
     const { id } = await params;
+
+    if (!admin) {
+      const emp = await db.select().from(employees).where(eq(employees.id, id)).limit(1);
+      if (!emp.length || emp[0].email !== session?.user?.email) {
+        return NextResponse.json({ error: "You can only edit your own profile" }, { status: 403 });
+      }
+    }
+
     const body = await request.json();
     const { name, email, designation, wfhType, fixedDays, isActive, rotationOrder } = body;
 
