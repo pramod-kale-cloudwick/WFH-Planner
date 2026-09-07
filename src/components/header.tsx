@@ -7,7 +7,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Settings, LogOut, Home, Bell, MessageCircle } from "lucide-react";
+import { Users, Settings, LogOut, Home, Bell, MessageCircle, History } from "lucide-react";
 import type { DateAnnotation } from "@/types";
 
 export function Header() {
@@ -52,6 +52,9 @@ export function Header() {
             </Link>
             <Link href="/settings" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
               <Settings className="h-4 w-4" />Settings
+            </Link>
+            <Link href="/audit" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
+              <History className="h-4 w-4" />Audit
             </Link>
           </nav>
         </div>

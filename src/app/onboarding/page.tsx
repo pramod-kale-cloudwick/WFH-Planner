@@ -21,6 +21,8 @@ const WEEKDAYS: { value: WeekDay; label: string }[] = [
   { value: "friday", label: "Friday" },
 ];
 
+const PRESET_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4", "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16"];
+
 export default function OnboardingPage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
@@ -29,6 +31,7 @@ export default function OnboardingPage() {
   const [designation, setDesignation] = useState("");
   const [wfhType, setWfhType] = useState<WfhType>("rotating");
   const [fixedDays, setFixedDays] = useState<WeekDay[]>([]);
+  const [color, setColor] = useState("");
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.isOnboarded) router.replace("/");
@@ -43,7 +46,7 @@ export default function OnboardingPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch("/api/employees/onboard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, designation, wfhType, fixedDays }) });
+      const res = await fetch("/api/employees/onboard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, designation, wfhType, fixedDays, color: color || undefined }) });
       if (!res.ok) {
         const data = await res.json();
         toast.error(data.error || "Onboarding failed");
@@ -109,6 +112,19 @@ export default function OnboardingPage() {
                 {wfhType === "permanent_wfh" && "Always works from home"}
                 {wfhType === "permanent_wfo" && "Always works from office"}
               </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Badge Color <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <div className="flex flex-wrap items-center gap-2">
+                {PRESET_COLORS.map((c) => (
+                  <button key={c} type="button" onClick={() => setColor(c)} style={{ backgroundColor: c }} className={`w-6 h-6 rounded-full transition-all duration-200 hover:scale-110 ${color === c ? "ring-2 ring-offset-2 ring-offset-background ring-white" : "opacity-70 hover:opacity-100"}`} title={c} />
+                ))}
+                <div className="flex items-center gap-1 ml-2">
+                  <span className="text-xs text-muted-foreground">or</span>
+                  <Input type="text" placeholder="#hex" value={color} onChange={(e) => { let v = e.target.value.trim(); if (v && !v.startsWith("#")) v = "#" + v; setColor(v); }} className="w-20 h-7 text-xs px-2" maxLength={7} />
+                </div>
+              </div>
+              {color && <div className="flex items-center gap-2"><span className="w-4 h-4 rounded" style={{ backgroundColor: color }} /><span className="text-xs text-muted-foreground">{color}</span></div>}
             </div>
             <div className="space-y-2">
               <Label>Fixed WFH Days <span className="text-muted-foreground text-xs">(optional)</span></Label>

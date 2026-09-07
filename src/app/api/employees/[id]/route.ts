@@ -19,7 +19,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const body = await request.json();
-    const { name, email, designation, wfhType, fixedDays, isActive, rotationOrder } = body;
+    const { name, email, designation, wfhType, fixedDays, isActive, rotationOrder, color } = body;
 
     const updated = await db.update(employees).set({
       ...(name !== undefined && { name }),
@@ -29,6 +29,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       ...(fixedDays !== undefined && { fixedDays: JSON.stringify(fixedDays) }),
       ...(isActive !== undefined && { isActive }),
       ...(rotationOrder !== undefined && { rotationOrder }),
+      ...(color !== undefined && { color: color || null }),
     }).where(eq(employees.id, id)).returning();
 
     if (!updated.length) return NextResponse.json({ error: "Employee not found" }, { status: 404 });

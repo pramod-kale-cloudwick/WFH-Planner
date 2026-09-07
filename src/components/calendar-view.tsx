@@ -13,7 +13,7 @@ import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays, MessageCircle, X, S
 import { cn } from "@/lib/utils";
 import type { WeekAllocation, Employee, WeekDay, DateAnnotation } from "@/types";
 
-const EMPLOYEE_COLORS = ["bg-blue-500/20 text-blue-300", "bg-green-500/20 text-green-300", "bg-purple-500/20 text-purple-300", "bg-orange-500/20 text-orange-300", "bg-pink-500/20 text-pink-300", "bg-cyan-500/20 text-cyan-300", "bg-yellow-500/20 text-yellow-300", "bg-red-500/20 text-red-300"];
+const DEFAULT_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4", "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16"];
 
 const LOADING_MESSAGES = [
   "Free tier vibes — our servers are powered by hopes, dreams, and zero budget.",
@@ -88,7 +88,9 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
 
   const employeeColorMap = useMemo(() => {
     const map = new Map<string, string>();
-    employees.forEach((emp, idx) => map.set(emp.id, EMPLOYEE_COLORS[idx % EMPLOYEE_COLORS.length]));
+    employees.forEach((emp, idx) => {
+      map.set(emp.id, emp.color || DEFAULT_COLORS[idx % DEFAULT_COLORS.length]);
+    });
     return map;
   }, [employees]);
 
@@ -262,8 +264,9 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
                         <div className="flex flex-wrap gap-1">
                           {wfhEmps.map((emp) => {
                             const isSelected = selectedEmployee?.allocationId === allocation?.id && selectedEmployee?.employeeId === emp.id;
+                            const empColor = employeeColorMap.get(emp.id) || "#6366F1";
                             return (
-                              <Badge key={emp.id} variant="secondary" className={cn("text-[10px] px-1.5 py-0 cursor-pointer transition-all duration-150", employeeColorMap.get(emp.id), isSelected && "ring-2 ring-primary ring-offset-1 ring-offset-background", isPastWeek && "opacity-50 cursor-not-allowed")} onClick={(e) => { e.stopPropagation(); !isPastWeek && handleEmployeeClick(day, emp); }}>
+                              <Badge key={emp.id} variant="secondary" className={cn("text-[10px] px-1.5 py-0 cursor-pointer transition-all duration-150", isSelected && "ring-2 ring-primary ring-offset-1 ring-offset-background", isPastWeek && "opacity-50 cursor-not-allowed")} style={{ backgroundColor: `${empColor}33`, color: empColor }} onClick={(e) => { e.stopPropagation(); !isPastWeek && handleEmployeeClick(day, emp); }}>
                                 {emp.name}
                               </Badge>
                             );
@@ -307,11 +310,14 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
 
       <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-4">
         <div className="flex flex-wrap items-center gap-2">
-          {rotatingEmployees.map((emp) => (
-            <Badge key={emp.id} variant="secondary" className={cn("text-[10px] px-1.5 py-0", employeeColorMap.get(emp.id))}>
-              {emp.name}
-            </Badge>
-          ))}
+          {rotatingEmployees.map((emp) => {
+            const empColor = employeeColorMap.get(emp.id) || "#6366F1";
+            return (
+              <Badge key={emp.id} variant="secondary" className="text-[10px] px-1.5 py-0" style={{ backgroundColor: `${empColor}33`, color: empColor }}>
+                {emp.name}
+              </Badge>
+            );
+          })}
         </div>
         <span>Showing WFH schedule for {format(currentDate, "MMMM yyyy")} (Mon – Fri)</span>
       </div>

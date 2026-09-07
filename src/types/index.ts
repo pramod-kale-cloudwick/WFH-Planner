@@ -12,6 +12,7 @@ export interface Employee {
   rotationOrder: number;
   isActive: boolean;
   isAdmin: boolean;
+  color?: string;
   createdAt: Date;
 }
 

@@ -8,8 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, X } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Plus, Pencil, X, AlertTriangle } from "lucide-react";
 import type { WfhType, WeekDay } from "@/types";
+
+const WFH_TYPE_WARNINGS: Record<WfhType, string> = {
+  permanent_wfo: "You'll be removed from all future WFH weeks. You'll always work from office.",
+  permanent_wfh: "You'll be removed from the rotation. You'll always work from home.",
+  rotating: "You'll be added to the rotation pool. Run 'Generate Schedule' to get assigned WFH weeks.",
+};
 
 const WEEKDAYS: { value: WeekDay; label: string }[] = [
   { value: "monday", label: "Monday" },
@@ -19,9 +26,14 @@ const WEEKDAYS: { value: WeekDay; label: string }[] = [
   { value: "friday", label: "Friday" },
 ];
 
+const PRESET_COLORS = [
+  "#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4",
+  "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16",
+];
+
 interface EmployeeFormProps {
   onSuccess: () => void;
-  initialData?: { id: string; name: string; email?: string; designation: string; wfhType: WfhType; fixedDays: WeekDay[] };
+  initialData?: { id: string; name: string; email?: string; designation: string; wfhType: WfhType; fixedDays: WeekDay[]; color?: string };
   mode?: "button" | "inline";
   isSelfEdit?: boolean;
 }
@@ -34,9 +46,13 @@ export function EmployeeForm({ onSuccess, initialData, mode = "button", isSelfEd
   const [designation, setDesignation] = useState(initialData?.designation || "");
   const [wfhType, setWfhType] = useState<WfhType>(initialData?.wfhType || "rotating");
   const [fixedDays, setFixedDays] = useState<WeekDay[]>(initialData?.fixedDays || []);
+  const [color, setColor] = useState(initialData?.color || "");
+  const originalWfhType = initialData?.wfhType;
+  const wfhTypeChanged = initialData && wfhType !== originalWfhType;
 
   const resetForm = () => {
-    if (!initialData) { setName(""); setEmail(""); setDesignation(""); setWfhType("rotating"); setFixedDays([]); }
+    if (!initialData) { setName(""); setEmail(""); setDesignation(""); setWfhType("rotating"); setFixedDays([]); setColor(""); }
+    else { setWfhType(initialData.wfhType); setColor(initialData.color || ""); }
   };
 
   const toggleDay = (day: WeekDay) => {
@@ -49,7 +65,15 @@ export function EmployeeForm({ onSuccess, initialData, mode = "button", isSelfEd
     try {
       const url = initialData ? `/api/employees/${initialData.id}` : "/api/employees";
       const method = initialData ? "PUT" : "POST";
-      await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, email, designation, wfhType, fixedDays }) });
+      await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, email, designation, wfhType, fixedDays, color: color || undefined }) });
+
+      // Handle cascading updates if wfhType changed
+      if (initialData && wfhTypeChanged && originalWfhType) {
+        const cascadeRes = await fetch(`/api/employees/${initialData.id}/cascade`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ oldWfhType: originalWfhType, newWfhType: wfhType }) });
+        const cascadeData = await cascadeRes.json();
+        if (cascadeData.message) toast.info(cascadeData.message, { duration: 5000 });
+      }
+
       onSuccess();
       setOpen(false);
       resetForm();
@@ -113,6 +137,26 @@ export function EmployeeForm({ onSuccess, initialData, mode = "button", isSelfEd
               {wfhType === "permanent_wfh" && "Always works from home"}
               {wfhType === "permanent_wfo" && "Always works from office"}
             </p>
+            {wfhTypeChanged && (
+              <Alert variant="destructive" className="mt-2 py-2">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-xs">{WFH_TYPE_WARNINGS[wfhType]}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>Badge Color <span className="text-muted-foreground text-xs">(shown on calendar)</span></Label>
+            <div className="flex flex-wrap items-center gap-2">
+              {PRESET_COLORS.map((c) => (
+                <button key={c} type="button" onClick={() => setColor(c)} style={{ backgroundColor: c }} className={`w-6 h-6 rounded-full transition-all duration-200 hover:scale-110 ${color === c ? "ring-2 ring-offset-2 ring-offset-background ring-white" : "opacity-70 hover:opacity-100"}`} title={c} />
+              ))}
+              <div className="flex items-center gap-1 ml-2">
+                <span className="text-xs text-muted-foreground">or</span>
+                <Input type="text" placeholder="#hex" value={color} onChange={(e) => { let v = e.target.value.trim(); if (v && !v.startsWith("#")) v = "#" + v; setColor(v); }} className="w-20 h-7 text-xs px-2" maxLength={7} />
+              </div>
+              {color && <button type="button" onClick={() => setColor("")} className="text-xs text-muted-foreground hover:text-foreground">Clear</button>}
+            </div>
+            {color && <div className="flex items-center gap-2"><span className="w-4 h-4 rounded" style={{ backgroundColor: color }} /><span className="text-xs text-muted-foreground">{color}</span></div>}
           </div>
           <div className="space-y-2">
             <Label>Fixed WFH Days <span className="text-muted-foreground text-xs">(every week, regardless of rotation)</span></Label>

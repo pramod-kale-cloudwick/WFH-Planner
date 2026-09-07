@@ -47,6 +47,7 @@ export const employees = sqliteTable("employees", {
   rotationOrder: integer("rotation_order").notNull().default(0),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
+  color: text("color"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
