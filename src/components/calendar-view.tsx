@@ -424,7 +424,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
             <div className="space-y-2">
               <label className="text-sm font-medium">Select target week</label>
               <Select value={targetWeekId} onValueChange={(v) => { setTargetWeekId(v || ""); setTargetEmployeeId(""); }}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Choose a week to swap into">
                     {targetWeekId && (() => { const w = futureWeeksForSwap.find((w) => w.id === targetWeekId); return w ? `Week ${w.weekNumber} (${format(w.weekStart, "MMM d")} - ${format(w.weekEnd, "MMM d")})` : ""; })()}
                   </SelectValue>
@@ -443,7 +443,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Select employee to swap with</label>
                 <Select value={targetEmployeeId} onValueChange={(v) => setTargetEmployeeId(v || "")}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Choose an employee">
                       {targetEmployeeId && (() => { const e = targetWeekEmployees.find((e) => e.id === targetEmployeeId); return e?.name || ""; })()}
                     </SelectValue>
@@ -484,7 +484,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
             <div className="space-y-2">
               <label className="text-sm font-medium">Select target week</label>
               <Select value={targetWeekId} onValueChange={(v) => { setTargetWeekId(v || ""); setTargetEmployeeId(""); }}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Choose a week">
                     {targetWeekId && (() => { const w = futureWeeksForSwap.find((w) => w.id === targetWeekId); return w ? `Week ${w.weekNumber} (${format(w.weekStart, "MMM d")} - ${format(w.weekEnd, "MMM d")})` : ""; })()}
                   </SelectValue>
@@ -503,7 +503,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Swap with</label>
                 <Select value={targetEmployeeId} onValueChange={(v) => setTargetEmployeeId(v || "")}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Choose an employee">
                       {targetEmployeeId && (() => { const e = targetWeekEmployees.find((e) => e.id === targetEmployeeId); return e?.name || ""; })()}
                     </SelectValue>
