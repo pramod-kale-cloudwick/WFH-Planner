@@ -69,6 +69,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Target is not in the selected week" }, { status: 400 });
     }
 
+    // Check if target is already in initiator's week (would result in duplicate)
+    const targetAlreadyInInitiatorWeek = await db.select().from(allocationEmployees).where(and(eq(allocationEmployees.allocationId, initiatorAllocationId), eq(allocationEmployees.employeeId, targetId))).limit(1);
+    if (targetAlreadyInInitiatorWeek.length) {
+      return NextResponse.json({ error: "Target is already assigned to your week" }, { status: 400 });
+    }
+
+    // Check if initiator is already in target's week (would result in duplicate)
+    const initiatorAlreadyInTargetWeek = await db.select().from(allocationEmployees).where(and(eq(allocationEmployees.allocationId, targetAllocationId), eq(allocationEmployees.employeeId, currentUser[0].id))).limit(1);
+    if (initiatorAlreadyInTargetWeek.length) {
+      return NextResponse.json({ error: "You are already assigned to the target week" }, { status: 400 });
+    }
+
     // Check for existing pending request
     const existing = await db.select().from(swapRequests).where(and(eq(swapRequests.initiatorId, currentUser[0].id), eq(swapRequests.targetId, targetId), or(eq(swapRequests.status, "pending_target"), eq(swapRequests.status, "pending_admin")))).limit(1);
     if (existing.length) {
