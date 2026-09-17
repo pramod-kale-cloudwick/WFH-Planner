@@ -89,6 +89,18 @@ export const dateAnnotations = sqliteTable("date_annotations", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
+export const swapRequests = sqliteTable("swap_requests", {
+  id: text("id").primaryKey(),
+  initiatorId: text("initiator_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  targetId: text("target_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  initiatorAllocationId: text("initiator_allocation_id").notNull().references(() => weekAllocations.id, { onDelete: "cascade" }),
+  targetAllocationId: text("target_allocation_id").notNull().references(() => weekAllocations.id, { onDelete: "cascade" }),
+  status: text("status", { enum: ["pending_target", "pending_admin", "approved", "rejected"] }).notNull().default("pending_target"),
+  rejectedBy: text("rejected_by"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+});
+
 // Relations
 export const employeesRelations = relations(employees, ({ many }) => ({
   allocations: many(allocationEmployees),

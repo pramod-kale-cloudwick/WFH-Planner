@@ -5,16 +5,25 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { format, formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Settings, LogOut, Home, Bell, MessageCircle, History } from "lucide-react";
-import type { DateAnnotation } from "@/types";
+import { Users, Settings, LogOut, Home, Bell, MessageCircle, History, ArrowRightLeft } from "lucide-react";
+import { useSwapRequests, useEmployees } from "@/lib/hooks";
+import type { DateAnnotation, SwapRequest } from "@/types";
 
 export function Header() {
   const { data: session } = useSession();
+  const { employees } = useEmployees();
+  const { requests: swapRequests } = useSwapRequests();
   const [notifications, setNotifications] = useState<DateAnnotation[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const initials = session?.user?.name?.split(" ").map((n) => n[0]).join("").toUpperCase() || "U";
+  const isAdmin = session?.user?.isAdmin ?? false;
+  const currentUser = employees.find((e) => e.email === session?.user?.email);
+
+  // Count pending swap requests for current user
+  const pendingSwapCount = swapRequests.filter((r: SwapRequest) => (r.status === "pending_target" && r.targetId === currentUser?.id) || (r.status === "pending_admin" && isAdmin)).length;
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -55,6 +64,10 @@ export function Header() {
             </Link>
             <Link href="/audit" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
               <History className="h-4 w-4" />Audit
+            </Link>
+            <Link href="/swap-requests" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95 relative">
+              <ArrowRightLeft className="h-4 w-4" />Swaps
+              {pendingSwapCount > 0 && <Badge className="h-5 px-1.5 text-[10px] bg-yellow-500 text-yellow-950">{pendingSwapCount}</Badge>}
             </Link>
           </nav>
         </div>

@@ -7,10 +7,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays, MessageCircle, X, Send } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays, MessageCircle, X, Send, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useEmployees, useAllocations, useAnnotations } from "@/lib/hooks";
 import type { WeekAllocation, Employee, WeekDay, DateAnnotation } from "@/types";
 
 const DEFAULT_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4", "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16"];
@@ -41,17 +44,39 @@ interface CalendarViewProps {
 export function CalendarView({ onSwapComplete }: CalendarViewProps) {
   const { data: session } = useSession();
   const isAdmin = session?.user?.isAdmin ?? false;
+  const userEmail = session?.user?.email;
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [allocations, setAllocations] = useState<WeekAllocation[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [annotations, setAnnotations] = useState<DateAnnotation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [swapping, setSwapping] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<{ allocationId: string; employeeId: string; weekStart: Date } | null>(null);
+
+  const { employees, isLoading: empLoading, mutate: mutateEmployees } = useEmployees();
+  const { allocations, isLoading: allocLoading, mutate: mutateAllocations } = useAllocations(currentDate.getFullYear(), currentDate.getMonth());
+
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  const calStart = startOfWeek(monthStart, { weekStartsOn: 0 });
+  const calEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
+  const { annotations, mutate: mutateAnnotations } = useAnnotations(format(calStart, "yyyy-MM-dd"), format(calEnd, "yyyy-MM-dd"));
+
+  const loading = empLoading || allocLoading;
+
   const [newAnnotation, setNewAnnotation] = useState("");
   const [savingAnnotation, setSavingAnnotation] = useState(false);
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
   const [hydrated, setHydrated] = useState(false);
+
+  // Swap request state
+  const [swapDialogOpen, setSwapDialogOpen] = useState(false);
+  const [selectedSelfAllocation, setSelectedSelfAllocation] = useState<WeekAllocation | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [targetWeekId, setTargetWeekId] = useState<string>("");
+  const [targetEmployeeId, setTargetEmployeeId] = useState<string>("");
+  const [submittingSwap, setSubmittingSwap] = useState(false);
+
+  // Admin direct swap state
+  const [adminSwapDialogOpen, setAdminSwapDialogOpen] = useState(false);
+  const [adminSelectedEmp, setAdminSelectedEmp] = useState<{ employee: Employee; allocation: WeekAllocation } | null>(null);
+
+  // Get current user's employee record
+  const currentUserEmployee = useMemo(() => employees.find((e) => e.email === userEmail), [employees, userEmail]);
 
   useEffect(() => {
     const last = parseInt(localStorage.getItem("loadingMsgIndex") || "-1", 10);
@@ -65,26 +90,6 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
     const interval = setInterval(() => setLoadingMsgIndex((i) => { const next = (i + 1) % LOADING_MESSAGES.length; localStorage.setItem("loadingMsgIndex", String(next)); return next; }), 3000);
     return () => clearInterval(interval);
   }, [loading, hydrated, loadingMsgIndex]);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const monthStart = startOfMonth(currentDate);
-    const monthEnd = endOfMonth(currentDate);
-    const calStart = startOfWeek(monthStart, { weekStartsOn: 0 });
-    const calEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
-    const [allocRes, empRes, annotRes] = await Promise.all([
-      fetch(`/api/allocations?year=${currentDate.getFullYear()}&month=${currentDate.getMonth()}`),
-      fetch("/api/employees"),
-      fetch(`/api/annotations?startDate=${format(calStart, "yyyy-MM-dd")}&endDate=${format(calEnd, "yyyy-MM-dd")}`),
-    ]);
-    const [allocData, empData, annotData] = await Promise.all([allocRes.json(), empRes.json(), annotRes.json()]);
-    setAllocations(allocData.map((a: WeekAllocation) => ({ ...a, weekStart: new Date(a.weekStart), weekEnd: new Date(a.weekEnd) })));
-    setEmployees(empData);
-    setAnnotations(annotData);
-    setLoading(false);
-  }, [currentDate]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
 
   const employeeColorMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -116,14 +121,34 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
     return annotations.filter((a) => a.date === dateStr);
   }, [annotations]);
 
+  // Get weeks where current user is assigned (for swap initiation)
+  const userAllocatedWeeks = useMemo(() => {
+    if (!currentUserEmployee) return [];
+    return allocations.filter((a) => a.employees.some((e) => e.id === currentUserEmployee.id));
+  }, [allocations, currentUserEmployee]);
+
+  // Get future weeks for target selection (excluding selected employee's week)
+  const futureWeeksForSwap = useMemo(() => {
+    const today = new Date();
+    const currentWeekStart = startOfWeek(today, { weekStartsOn: 0 });
+    const selectedAllocationId = isAdmin ? adminSelectedEmp?.allocation.id : selectedSelfAllocation?.id;
+    return allocations.filter((a) => !isBefore(a.weekStart, currentWeekStart) && a.id !== selectedAllocationId);
+  }, [allocations, isAdmin, adminSelectedEmp, selectedSelfAllocation]);
+
+  // Employees in selected target week
+  const targetWeekEmployees = useMemo(() => {
+    if (!targetWeekId) return [];
+    const week = allocations.find((a) => a.id === targetWeekId);
+    return week?.employees || [];
+  }, [targetWeekId, allocations]);
+
   const handleAddAnnotation = async (day: Date) => {
     if (!newAnnotation.trim()) return;
     setSavingAnnotation(true);
     try {
       const res = await fetch("/api/annotations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: format(day, "yyyy-MM-dd"), message: newAnnotation.trim() }) });
       if (!res.ok) { toast.error("Failed to add note"); return; }
-      const data = await res.json();
-      setAnnotations((prev) => [...prev, data]);
+      mutateAnnotations();
       setNewAnnotation("");
       toast.success("Note added");
     } catch { toast.error("Failed to add note"); } finally { setSavingAnnotation(false); }
@@ -133,62 +158,103 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
     try {
       const res = await fetch(`/api/annotations/${id}`, { method: "DELETE" });
       if (!res.ok) { toast.error("Failed to delete note"); return; }
-      setAnnotations((prev) => prev.filter((a) => a.id !== id));
+      mutateAnnotations();
       toast.success("Note deleted");
     } catch { toast.error("Failed to delete note"); }
   };
 
-  const handleEmployeeClick = async (day: Date, employee: Employee) => {
-    if (isWeekend(day)) return;
+  const handleEmployeeClick = (day: Date, employee: Employee) => {
     const allocation = getAllocationForDay(day);
     if (!allocation) return;
 
     const today = new Date();
     const currentWeekStart = startOfWeek(today, { weekStartsOn: 0 });
     const dayWeekStart = startOfWeek(day, { weekStartsOn: 0 });
-    if (isBefore(dayWeekStart, currentWeekStart)) return;
-
-    if (!selectedEmployee) {
-      setSelectedEmployee({ allocationId: allocation.id, employeeId: employee.id, weekStart: startOfWeek(day, { weekStartsOn: 0 }) });
-      toast.info(`Selected ${employee.name}. Click another employee to swap, or same to deselect.`, { id: "swap-hint", duration: Infinity });
-      return;
-    }
-    if (selectedEmployee.allocationId === allocation.id && selectedEmployee.employeeId === employee.id) {
-      setSelectedEmployee(null);
-      toast.dismiss("swap-hint");
-      return;
-    }
-    if (selectedEmployee.allocationId === allocation.id) {
-      setSelectedEmployee({ allocationId: allocation.id, employeeId: employee.id, weekStart: startOfWeek(day, { weekStartsOn: 0 }) });
-      toast.info(`Selected ${employee.name}. Click another employee to swap, or same to deselect.`, { id: "swap-hint", duration: Infinity });
+    if (isBefore(dayWeekStart, currentWeekStart)) {
+      toast.error("Cannot swap past weeks");
       return;
     }
 
-    toast.loading("Swapping...", { id: "swap-hint" });
-    setSwapping(true);
-    try {
-      const res = await fetch("/api/allocations/swap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ allocationId1: selectedEmployee.allocationId, employeeId1: selectedEmployee.employeeId, allocationId2: allocation.id, employeeId2: employee.id }) });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Swap failed", { id: "swap-hint" });
-        setSelectedEmployee(null);
+    if (isAdmin) {
+      // Admin can swap anyone directly
+      setAdminSelectedEmp({ employee, allocation });
+      setTargetWeekId("");
+      setTargetEmployeeId("");
+      setAdminSwapDialogOpen(true);
+    } else {
+      // Regular users can only swap themselves
+      if (!currentUserEmployee || employee.id !== currentUserEmployee.id) {
+        toast.error("You can only initiate swaps for yourself");
         return;
       }
-      setSelectedEmployee(null);
-      await fetchData();
+      setSelectedSelfAllocation(allocation);
+      setSelectedEmployee(employee);
+      setTargetWeekId("");
+      setTargetEmployeeId("");
+      setSwapDialogOpen(true);
+    }
+  };
+
+  // Admin direct swap handler
+  const handleAdminDirectSwap = async () => {
+    if (!adminSelectedEmp || !targetWeekId || !targetEmployeeId) {
+      toast.error("Please select a week and employee to swap with");
+      return;
+    }
+
+    setSubmittingSwap(true);
+    try {
+      const res = await fetch("/api/allocations/swap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ allocationId1: adminSelectedEmp.allocation.id, employeeId1: adminSelectedEmp.employee.id, allocationId2: targetWeekId, employeeId2: targetEmployeeId }) });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Swap failed");
+        return;
+      }
+      toast.success(`Swapped ${adminSelectedEmp.employee.name} successfully. Affected employees will be notified.`);
+      setAdminSwapDialogOpen(false);
+      setAdminSelectedEmp(null);
+      setTargetWeekId("");
+      setTargetEmployeeId("");
+      mutateAllocations();
       onSwapComplete?.();
-      toast.success("Employees swapped", { id: "swap-hint" });
     } catch {
-      toast.error("Swap failed", { id: "swap-hint" });
+      toast.error("Swap failed");
     } finally {
-      setSwapping(false);
+      setSubmittingSwap(false);
+    }
+  };
+
+  const handleSubmitSwapRequest = async () => {
+    if (!selectedSelfAllocation || !targetWeekId || !targetEmployeeId) {
+      toast.error("Please select a week and employee to swap with");
+      return;
+    }
+
+    setSubmittingSwap(true);
+    try {
+      const res = await fetch("/api/swap-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetId: targetEmployeeId, initiatorAllocationId: selectedSelfAllocation.id, targetAllocationId: targetWeekId }) });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to create swap request");
+        return;
+      }
+      toast.success("Swap request sent! Waiting for target approval.");
+      setSwapDialogOpen(false);
+      setSelectedSelfAllocation(null);
+      setTargetWeekId("");
+      setTargetEmployeeId("");
+      onSwapComplete?.();
+    } catch {
+      toast.error("Failed to create swap request");
+    } finally {
+      setSubmittingSwap(false);
     }
   };
 
   const handleGenerate = async () => {
-    setLoading(true);
     await fetch("/api/allocations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ weeksCount: 20 }) });
-    await fetchData();
+    mutateAllocations();
+    mutateEmployees();
     toast.success("Schedule generated");
   };
 
@@ -263,11 +329,12 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
                       {!weekend && isCurrentMonth && wfhEmps.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {wfhEmps.map((emp) => {
-                            const isSelected = selectedEmployee?.allocationId === allocation?.id && selectedEmployee?.employeeId === emp.id;
                             const empColor = employeeColorMap.get(emp.id) || "#6366F1";
+                            const isSelf = currentUserEmployee?.id === emp.id;
+                            const canSwap = (isSelf || isAdmin) && !isPastWeek;
                             return (
-                              <Badge key={emp.id} variant="secondary" className={cn("text-[10px] px-1.5 py-0 cursor-pointer transition-all duration-150", isSelected && "ring-2 ring-primary ring-offset-1 ring-offset-background", isPastWeek && "opacity-50 cursor-not-allowed")} style={{ backgroundColor: `${empColor}33`, color: empColor }} onClick={(e) => { e.stopPropagation(); !isPastWeek && handleEmployeeClick(day, emp); }}>
-                                {emp.name}
+                              <Badge key={emp.id} variant="secondary" className={cn("text-[10px] px-1.5 py-0 transition-all duration-150", canSwap && "cursor-pointer hover:ring-2 hover:ring-primary", isPastWeek && "opacity-50", !canSwap && "cursor-default")} style={{ backgroundColor: `${empColor}33`, color: empColor }} onClick={(e) => { e.stopPropagation(); if (canSwap) handleEmployeeClick(day, emp); }}>
+                                {emp.name}{canSwap && <ArrowRightLeft className="inline h-2.5 w-2.5 ml-1 opacity-60" />}
                               </Badge>
                             );
                           })}
@@ -339,6 +406,120 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
           </div>
         </div>
       )}
+
+      {/* Swap Request Dialog */}
+      <Dialog open={swapDialogOpen} onOpenChange={setSwapDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Week Swap</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">Your current week:</p>
+              <Badge variant="outline" className="text-sm">
+                Week {selectedSelfAllocation?.weekNumber} ({selectedSelfAllocation && format(selectedSelfAllocation.weekStart, "MMM d")} - {selectedSelfAllocation && format(selectedSelfAllocation.weekEnd, "MMM d")})
+              </Badge>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select target week</label>
+              <Select value={targetWeekId} onValueChange={(v) => { setTargetWeekId(v || ""); setTargetEmployeeId(""); }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a week to swap into" />
+                </SelectTrigger>
+                <SelectContent>
+                  {futureWeeksForSwap.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      Week {w.weekNumber} ({format(w.weekStart, "MMM d")} - {format(w.weekEnd, "MMM d")})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {targetWeekId && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Select employee to swap with</label>
+                <Select value={targetEmployeeId} onValueChange={(v) => setTargetEmployeeId(v || "")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose an employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {targetWeekEmployees.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setSwapDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleSubmitSwapRequest} disabled={submittingSwap || !targetWeekId || !targetEmployeeId}>
+                {submittingSwap ? "Sending..." : "Send Request"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Direct Swap Dialog */}
+      <Dialog open={adminSwapDialogOpen} onOpenChange={setAdminSwapDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Admin Swap (Direct)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">Swapping:</p>
+              <Badge variant="outline" className="text-sm">
+                {adminSelectedEmp?.employee.name} — Week {adminSelectedEmp?.allocation.weekNumber} ({adminSelectedEmp && format(adminSelectedEmp.allocation.weekStart, "MMM d")})
+              </Badge>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select target week</label>
+              <Select value={targetWeekId} onValueChange={(v) => { setTargetWeekId(v || ""); setTargetEmployeeId(""); }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a week" />
+                </SelectTrigger>
+                <SelectContent>
+                  {futureWeeksForSwap.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      Week {w.weekNumber} ({format(w.weekStart, "MMM d")} - {format(w.weekEnd, "MMM d")})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {targetWeekId && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Swap with</label>
+                <Select value={targetEmployeeId} onValueChange={(v) => setTargetEmployeeId(v || "")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose an employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {targetWeekEmployees.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">This swap will be executed immediately. Both employees will be notified.</p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setAdminSwapDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleAdminDirectSwap} disabled={submittingSwap || !targetWeekId || !targetEmployeeId}>
+                {submittingSwap ? "Swapping..." : "Swap Now"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

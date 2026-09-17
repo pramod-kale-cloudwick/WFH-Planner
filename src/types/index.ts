@@ -63,3 +63,21 @@ export interface DateAnnotation {
   authorName: string;
   createdAt: Date;
 }
+
+export type SwapRequestStatus = "pending_target" | "pending_admin" | "approved" | "rejected";
+
+export interface SwapRequest {
+  id: string;
+  initiatorId: string;
+  targetId: string;
+  initiatorAllocationId: string;
+  targetAllocationId: string;
+  status: SwapRequestStatus;
+  rejectedBy?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  initiatorName?: string;
+  targetName?: string;
+  initiatorWeek?: { weekNumber: number; weekStart: string; weekEnd: string };
+  targetWeek?: { weekNumber: number; weekStart: string; weekEnd: string };
+}
