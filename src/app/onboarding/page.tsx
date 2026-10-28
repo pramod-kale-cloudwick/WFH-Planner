@@ -8,20 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { X } from "lucide-react";
-import type { WfhType, WeekDay } from "@/types";
-
-const WEEKDAYS: { value: WeekDay; label: string }[] = [
-  { value: "monday", label: "Monday" },
-  { value: "tuesday", label: "Tuesday" },
-  { value: "wednesday", label: "Wednesday" },
-  { value: "thursday", label: "Thursday" },
-  { value: "friday", label: "Friday" },
-];
-
-const PRESET_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4", "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16"];
+import { FieldError, PreferenceFields, type Preferences } from "@/components/profile-fields";
+import { Loader2 } from "lucide-react";
+import { LIMITS, validateEmployee } from "@/lib/employee-validation";
 
 export default function OnboardingPage() {
   const { data: session, status, update } = useSession();
@@ -29,34 +18,28 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false);
   const [typedName, setName] = useState<string | null>(null);
   const [designation, setDesignation] = useState("");
-  const [wfhType, setWfhType] = useState<WfhType>("rotating");
-  const [fixedDays, setFixedDays] = useState<WeekDay[]>([]);
-  const [color, setColor] = useState("");
+  const [prefs, setPrefs] = useState<Preferences>({ wfhType: "rotating", fixedDays: [], color: "" });
+  const [submitted, setSubmitted] = useState(false);
   // GitHub name is only a default until the user edits the field
   const name = typedName ?? session?.user?.name ?? "";
+  const { errors, data, valid } = validateEmployee({ name, designation, ...prefs });
+  const shown = submitted ? errors : {};
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.isOnboarded) router.replace("/");
   }, [status, session, router]);
 
-  const toggleDay = (day: WeekDay) => {
-    setFixedDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !designation.trim()) { toast.error("Name and designation are required"); return; }
+    setSubmitted(true);
+    if (!valid) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/employees/onboard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, designation, wfhType, fixedDays, color: color || undefined }) });
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || "Onboarding failed");
-        return;
-      }
-      const data = await res.json();
+      const res = await fetch("/api/employees/onboard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, color: data.color ?? undefined }) });
+      const body = await res.json();
+      if (!res.ok) { toast.error(body.error || "Onboarding failed"); return; }
       await update();
-      toast.success(data.isFirstUser ? "Welcome, admin! Profile set up." : "Profile set up. You're in.");
+      toast.success(body.isFirstUser ? "Welcome, admin! Profile set up." : "Profile set up. You're in.");
       router.replace("/");
     } catch {
       toast.error("Onboarding failed");
@@ -84,62 +67,19 @@ export default function OnboardingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="John Doe" required />
+              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="John Doe" maxLength={LIMITS.name} aria-invalid={!!shown.name} />
+              <FieldError message={shown.name} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="designation">Designation</Label>
-              <Input id="designation" value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="Software Engineer" required />
+              <Input id="designation" value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="Software Engineer" maxLength={LIMITS.designation} aria-invalid={!!shown.designation} />
+              <FieldError message={shown.designation} />
             </div>
-            <div className="space-y-2">
-              <Label>WFH Type</Label>
-              <Select value={wfhType} onValueChange={(v) => setWfhType(v as WfhType)}>
-                <SelectTrigger>
-                  <SelectValue>
-                    {wfhType === "rotating" && "Rotating"}
-                    {wfhType === "permanent_wfh" && "Permanent WFH"}
-                    {wfhType === "permanent_wfo" && "Permanent WFO"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="min-w-70">
-                  <SelectItem value="rotating">Rotating</SelectItem>
-                  <SelectItem value="permanent_wfh">Permanent WFH</SelectItem>
-                  <SelectItem value="permanent_wfo">Permanent WFO</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {wfhType === "rotating" && "Full week WFH on rotation turn"}
-                {wfhType === "permanent_wfh" && "Always works from home"}
-                {wfhType === "permanent_wfo" && "Always works from office"}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label>Badge Color <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              <div className="flex flex-wrap items-center gap-2">
-                {PRESET_COLORS.map((c) => (
-                  <button key={c} type="button" onClick={() => setColor(c)} style={{ backgroundColor: c }} className={`w-6 h-6 rounded-full transition-all duration-200 hover:scale-110 ${color === c ? "ring-2 ring-offset-2 ring-offset-background ring-white" : "opacity-70 hover:opacity-100"}`} title={c} />
-                ))}
-                <div className="flex items-center gap-1 ml-2">
-                  <span className="text-xs text-muted-foreground">or</span>
-                  <Input type="text" placeholder="#hex" value={color} onChange={(e) => { let v = e.target.value.trim(); if (v && !v.startsWith("#")) v = "#" + v; setColor(v); }} className="w-20 h-7 text-xs px-2" maxLength={7} />
-                </div>
-              </div>
-              {color && <div className="flex items-center gap-2"><span className="w-4 h-4 rounded" style={{ backgroundColor: color }} /><span className="text-xs text-muted-foreground">{color}</span></div>}
-            </div>
-            <div className="space-y-2">
-              <Label>Fixed Office Days <span className="text-muted-foreground text-xs">(optional, in office every week)</span></Label>
-              <div className="flex flex-wrap gap-2">
-                {WEEKDAYS.map((day) => (
-                  <Badge key={day.value} variant={fixedDays.includes(day.value) ? "default" : "outline"} className="cursor-pointer select-none transition-all duration-200 hover:scale-105 active:scale-95" onClick={() => toggleDay(day.value)}>
-                    {day.label}
-                    {fixedDays.includes(day.value) && <X className="h-3 w-3 ml-1" />}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>{loading ? "Saving..." : "Continue"}</Button>
+            <PreferenceFields value={prefs} onChange={(p) => setPrefs((prev) => ({ ...prev, ...p }))} errors={shown} />
+            <Button type="submit" className="w-full" disabled={loading || (submitted && !valid)}>{loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}{loading ? "Saving..." : "Continue"}</Button>
           </form>
         </CardContent>
       </Card>

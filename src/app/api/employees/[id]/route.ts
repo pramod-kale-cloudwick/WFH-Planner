@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { employees, allocationEmployees, swapHistory, swapRequests, dateAnnotations, dayBumps, notifications } from "@/lib/schema";
-import { eq, or } from "drizzle-orm";
+import { and, eq, ne, or, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { rebalanceSchedule } from "@/lib/allocation-engine";
+import { firstError, validateEmployee } from "@/lib/employee-validation";
 
 const TYPE_CHANGE_MESSAGES: Record<string, string> = {
   permanent_wfo: "You'll always work from office. Future WFH weeks are re-planned (next week stays as is).",
@@ -23,18 +24,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!admin && !isSelf) return NextResponse.json({ error: "You can only edit your own profile" }, { status: 403 });
 
     const body = await request.json();
-    const { name, email, designation, wfhType, fixedDays, isActive, color } = body;
     // Email is the login link to the session, so changing your own would lock you out
     const canChangeEmail = admin && !isSelf;
+    const { errors, data, valid } = validateEmployee({ ...body, email: canChangeEmail ? body.email : undefined }, { partial: true, currentType: emp.wfhType });
+    if (!valid) return NextResponse.json({ error: firstError(errors), errors }, { status: 400 });
+    const { name, email, designation, wfhType, fixedDays, color } = data;
+    if (email && (await db.select({ id: employees.id }).from(employees).where(and(sql`lower(${employees.email}) = ${email}`, ne(employees.id, id))).limit(1)).length) return NextResponse.json({ error: "Another employee already uses this email", errors: { email: "Email already in use" } }, { status: 409 });
+    const isActive = admin && typeof body.isActive === "boolean" ? body.isActive : undefined;
 
     const [updated] = await db.update(employees).set({
       ...(name !== undefined && { name }),
-      ...(canChangeEmail && email !== undefined && { email: email || null }),
+      ...(email !== undefined && { email }),
       ...(designation !== undefined && { designation }),
       ...(wfhType !== undefined && { wfhType }),
       ...(fixedDays !== undefined && { fixedDays: JSON.stringify(fixedDays) }),
       ...(isActive !== undefined && { isActive }),
-      ...(color !== undefined && { color: color || null }),
+      ...(color !== undefined && { color }),
     }).where(eq(employees.id, id)).returning();
 
     const typeChanged = updated.wfhType !== emp.wfhType;

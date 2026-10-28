@@ -5,6 +5,7 @@ import { employees } from "@/lib/schema";
 import { eq, max } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { rebalanceSchedule } from "@/lib/allocation-engine";
+import { firstError, validateEmployee } from "@/lib/employee-validation";
 
 const ALL_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4", "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16"];
 
@@ -22,9 +23,9 @@ export async function POST(request: NextRequest) {
     const existing = await db.select().from(employees).where(eq(employees.email, session.user.email)).limit(1);
     if (existing.length > 0) return NextResponse.json({ error: "Already onboarded" }, { status: 400 });
 
-    const body = await request.json();
-    const { name, designation, wfhType, fixedDays, color } = body;
-    if (!name?.trim() || !designation?.trim()) return NextResponse.json({ error: "Name and designation are required" }, { status: 400 });
+    const { errors, data, valid } = validateEmployee({ ...(await request.json()), email: undefined });
+    if (!valid) return NextResponse.json({ error: firstError(errors), errors }, { status: 400 });
+    const { name, designation, wfhType, fixedDays, color } = data as Required<typeof data>;
 
     const existingAdmin = await db.select().from(employees).where(eq(employees.isAdmin, true)).limit(1);
     const isFirstUser = existingAdmin.length === 0;
@@ -38,11 +39,11 @@ export async function POST(request: NextRequest) {
 
     const newEmployee = await db.insert(employees).values({
       id: nanoid(),
-      name: name.trim(),
+      name,
       email: session.user.email,
-      designation: designation.trim(),
-      wfhType: wfhType || "rotating",
-      fixedDays: JSON.stringify(fixedDays || []),
+      designation,
+      wfhType,
+      fixedDays: JSON.stringify(fixedDays),
       rotationOrder: nextOrder,
       isActive: true,
       isAdmin: isFirstUser,

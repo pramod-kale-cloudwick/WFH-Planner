@@ -6,176 +6,104 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, Pencil, X, AlertTriangle } from "lucide-react";
+import { FieldError, PreferenceFields, type Preferences } from "@/components/profile-fields";
+import { Plus, Pencil, AlertTriangle, Loader2 } from "lucide-react";
+import { LIMITS, validateEmployee, type FieldErrors } from "@/lib/employee-validation";
 import type { WfhType, WeekDay } from "@/types";
 
 const WFH_TYPE_WARNINGS: Record<WfhType, string> = {
-  permanent_wfo: "You'll always work from office. Schedule re-plans from the week after next.",
-  permanent_wfh: "You'll always work from home. Schedule re-plans from the week after next.",
-  rotating: "You'll join the rotation in alphabetical order. Schedule re-plans from the week after next.",
+  permanent_wfo: "Always in office. Fixed office days are cleared. Schedule re-plans from the week after next.",
+  permanent_wfh: "Always WFH. Schedule re-plans from the week after next.",
+  rotating: "Joins the rotation in alphabetical order. Schedule re-plans from the week after next.",
 };
 
-const WEEKDAYS: { value: WeekDay; label: string }[] = [
-  { value: "monday", label: "Monday" },
-  { value: "tuesday", label: "Tuesday" },
-  { value: "wednesday", label: "Wednesday" },
-  { value: "thursday", label: "Thursday" },
-  { value: "friday", label: "Friday" },
-];
-
-const PRESET_COLORS = [
-  "#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4",
-  "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16",
-];
+type InitialData = { id: string; name: string; email?: string; designation: string; wfhType: WfhType; fixedDays: WeekDay[]; color?: string };
+type FormState = Preferences & { name: string; email: string; designation: string };
 
 interface EmployeeFormProps {
   onSuccess: () => void;
-  initialData?: { id: string; name: string; email?: string; designation: string; wfhType: WfhType; fixedDays: WeekDay[]; color?: string };
+  initialData?: InitialData;
   mode?: "button" | "inline";
   isSelfEdit?: boolean;
 }
 
+const toState = (d?: InitialData): FormState => ({ name: d?.name ?? "", email: d?.email ?? "", designation: d?.designation ?? "", wfhType: d?.wfhType ?? "rotating", fixedDays: d?.fixedDays ?? [], color: d?.color ?? "" });
+
 export function EmployeeForm({ onSuccess, initialData, mode = "button", isSelfEdit = false }: EmployeeFormProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [name, setName] = useState(initialData?.name || "");
-  const [email, setEmail] = useState(initialData?.email || "");
-  const [designation, setDesignation] = useState(initialData?.designation || "");
-  const [wfhType, setWfhType] = useState<WfhType>(initialData?.wfhType || "rotating");
-  const [fixedDays, setFixedDays] = useState<WeekDay[]>(initialData?.fixedDays || []);
-  const [color, setColor] = useState(initialData?.color || "");
-  const originalWfhType = initialData?.wfhType;
-  const wfhTypeChanged = initialData && wfhType !== originalWfhType;
+  const [form, setForm] = useState<FormState>(() => toState(initialData));
+  const [submitted, setSubmitted] = useState(false);
+  const [serverErrors, setServerErrors] = useState<FieldErrors>({});
 
-  const resetForm = () => {
-    if (!initialData) { setName(""); setEmail(""); setDesignation(""); setWfhType("rotating"); setFixedDays([]); setColor(""); }
-    else { setWfhType(initialData.wfhType); setColor(initialData.color || ""); }
-  };
+  const { errors, data, valid } = validateEmployee({ ...form, email: isSelfEdit ? undefined : form.email });
+  const shown: FieldErrors = { ...(submitted ? errors : {}), ...serverErrors };
+  const wfhTypeChanged = initialData && form.wfhType !== initialData.wfhType;
+  const update = (patch: Partial<FormState>) => { setForm((f) => ({ ...f, ...patch })); setServerErrors((e) => { const next = { ...e }; (Object.keys(patch) as (keyof FieldErrors)[]).forEach((k) => delete next[k]); return next; }); };
 
-  const toggleDay = (day: WeekDay) => {
-    setFixedDays((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]);
+  const handleOpenChange = (o: boolean) => {
+    if (o) { setForm(toState(initialData)); setSubmitted(false); setServerErrors({}); }
+    setOpen(o);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitted(true);
+    if (!valid) return;
     setLoading(true);
     try {
-      const url = initialData ? `/api/employees/${initialData.id}` : "/api/employees";
-      const method = initialData ? "PUT" : "POST";
-      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, email, designation, wfhType, fixedDays, color: color || undefined }) });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || "Failed to save employee"); return; }
-      if (data.message) toast.info(data.message, { duration: 5000 });
-
+      const res = await fetch(initialData ? `/api/employees/${initialData.id}` : "/api/employees", { method: initialData ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, color: data.color ?? undefined }) });
+      const body = await res.json();
+      if (!res.ok) { if (body.errors) setServerErrors(body.errors); toast.error(body.error || "Failed to save employee"); return; }
+      if (body.message) toast.info(body.message, { duration: 5000 });
       onSuccess();
       setOpen(false);
-      resetForm();
       toast.success(initialData ? "Employee updated" : "Employee added");
-    } finally {
-      setLoading(false);
-    }
+    } catch { toast.error("Failed to save employee"); } finally { setLoading(false); }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         className={mode === "inline"
           ? "flex items-center gap-2 px-2 py-1.5 text-sm w-full rounded-md hover:bg-accent transition-all duration-200 cursor-pointer active:scale-95"
           : "inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/80 transition-all duration-200 hover:scale-105 active:scale-95"
         }
       >
-        {initialData ? (
-          <><Pencil className="h-4 w-4" />{isSelfEdit ? "Edit Profile" : "Edit"}</>
-        ) : (
-          <><Plus className="h-4 w-4" />Add Employee</>
-        )}
+        {initialData ? <><Pencil className="h-4 w-4" />{isSelfEdit ? "Edit Profile" : "Edit"}</> : <><Plus className="h-4 w-4" />Add Employee</>}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{initialData ? (isSelfEdit ? "Edit Your Profile" : "Edit Employee") : "Add Employee"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="John Doe" required />
+            <Input id="name" value={form.name} onChange={(e) => update({ name: e.target.value })} placeholder="John Doe" maxLength={LIMITS.name} aria-invalid={!!shown.name} />
+            <FieldError message={shown.name} />
           </div>
           {!isSelfEdit && (
             <div className="space-y-2">
-              <Label htmlFor="email">Email <span className="text-muted-foreground text-xs">(for login matching)</span></Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="john@company.com" />
+              <Label htmlFor="email">Email <span className="text-muted-foreground text-xs">(optional, for login matching)</span></Label>
+              <Input id="email" type="email" value={form.email} onChange={(e) => update({ email: e.target.value })} placeholder="john@company.com" maxLength={LIMITS.email} aria-invalid={!!shown.email} />
+              <FieldError message={shown.email} />
             </div>
           )}
           <div className="space-y-2">
             <Label htmlFor="designation">Designation</Label>
-            <Input id="designation" value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="Software Engineer" required />
+            <Input id="designation" value={form.designation} onChange={(e) => update({ designation: e.target.value })} placeholder="Software Engineer" maxLength={LIMITS.designation} aria-invalid={!!shown.designation} />
+            <FieldError message={shown.designation} />
           </div>
-          <div className="space-y-2">
-            <Label>WFH Type</Label>
-            <Select value={wfhType} onValueChange={(v) => setWfhType(v as WfhType)}>
-              <SelectTrigger>
-                <SelectValue>
-                  {wfhType === "rotating" && "Rotating"}
-                  {wfhType === "permanent_wfh" && "Permanent WFH"}
-                  {wfhType === "permanent_wfo" && "Permanent WFO"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="min-w-[280px]">
-                <SelectItem value="rotating">Rotating</SelectItem>
-                <SelectItem value="permanent_wfh">Permanent WFH</SelectItem>
-                <SelectItem value="permanent_wfo">Permanent WFO</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {wfhType === "rotating" && "Full week WFH on rotation turn"}
-              {wfhType === "permanent_wfh" && "Always works from home"}
-              {wfhType === "permanent_wfo" && "Always works from office"}
-            </p>
-            {wfhTypeChanged && (
-              <Alert variant="destructive" className="mt-2 py-2">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="text-xs">{WFH_TYPE_WARNINGS[wfhType]}</AlertDescription>
-              </Alert>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label>Badge Color <span className="text-muted-foreground text-xs">(shown on calendar)</span></Label>
-            <div className="flex flex-wrap items-center gap-2">
-              {PRESET_COLORS.map((c) => (
-                <button key={c} type="button" onClick={() => setColor(c)} style={{ backgroundColor: c }} className={`w-6 h-6 rounded-full transition-all duration-200 hover:scale-110 ${color === c ? "ring-2 ring-offset-2 ring-offset-background ring-white" : "opacity-70 hover:opacity-100"}`} title={c} />
-              ))}
-              <div className="flex items-center gap-1 ml-2">
-                <span className="text-xs text-muted-foreground">or</span>
-                <Input type="text" placeholder="#hex" value={color} onChange={(e) => { let v = e.target.value.trim(); if (v && !v.startsWith("#")) v = "#" + v; setColor(v); }} className="w-20 h-7 text-xs px-2" maxLength={7} />
-              </div>
-              {color && <button type="button" onClick={() => setColor("")} className="text-xs text-muted-foreground hover:text-foreground">Clear</button>}
-            </div>
-            {color && <div className="flex items-center gap-2"><span className="w-4 h-4 rounded" style={{ backgroundColor: color }} /><span className="text-xs text-muted-foreground">{color}</span></div>}
-          </div>
-          <div className="space-y-2">
-            <Label>Fixed Office Days <span className="text-muted-foreground text-xs">(in office every week, even on WFH weeks)</span></Label>
-            <div className="flex flex-wrap gap-2">
-              {WEEKDAYS.map((day) => (
-                <Badge
-                  key={day.value}
-                  variant={fixedDays.includes(day.value) ? "default" : "outline"}
-                  className="cursor-pointer select-none transition-all duration-200 hover:scale-105 active:scale-95"
-                  onClick={() => toggleDay(day.value)}
-                >
-                  {day.label}
-                  {fixedDays.includes(day.value) && <X className="h-3 w-3 ml-1" />}
-                </Badge>
-              ))}
-            </div>
-            {fixedDays.length > 0 && (
-              <p className="text-xs text-muted-foreground">Selected: {fixedDays.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")}</p>
-            )}
-          </div>
+          <PreferenceFields value={form} onChange={update} errors={shown} typeNotice={wfhTypeChanged && (
+            <Alert variant="destructive" className="mt-2 py-2">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription className="text-xs">{WFH_TYPE_WARNINGS[form.wfhType]}</AlertDescription>
+            </Alert>
+          )} />
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={loading}>{loading ? "Saving..." : "Save"}</Button>
+            <Button type="button" variant="outline" disabled={loading} onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={loading || (submitted && !valid)}>{loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}{loading ? "Saving..." : "Save"}</Button>
           </div>
         </form>
       </DialogContent>
