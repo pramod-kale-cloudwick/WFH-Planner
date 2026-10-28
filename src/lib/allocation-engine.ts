@@ -5,6 +5,7 @@ import { eq, and, asc, desc, gte, lte, inArray } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import type { Employee, WeekAllocation, Settings, WeekDay } from "@/types";
+import { workWeek } from "./utils";
 
 type Batch = [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]];
 type Emp = typeof employees.$inferSelect;
@@ -16,7 +17,7 @@ const WEEKDAYS: WeekDay[] = ["monday", "tuesday", "wednesday", "thursday", "frid
 const FREEZE_WEEKS = 1;
 const DEFAULT_WEEKS = 20;
 const toDay = (d: Date) => format(d, "yyyy-MM-dd");
-const pretty = (day: string) => format(parseISO(day), "MMM d");
+const pretty = (weekStart: string) => workWeek(weekStart).range;
 const currentWeekStart = () => toDay(startOfWeek(new Date(), WEEK_OPTS));
 const runBatch = (ops: BatchItem<"sqlite">[]) => (ops.length ? db.batch(ops as Batch) : Promise.resolve());
 

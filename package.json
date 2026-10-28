@@ -20,6 +20,7 @@
     "clsx": "^2.1.1",
     "cn": "^0.2.6",
     "date-fns": "^4.4.0",
+    "driver.js": "^1.10.2",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.27.0",
     "nanoid": "^5.1.16",

@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { ArrowRightLeft, Check, X, Clock, Trash2, Loader2 } from "lucide-react";
 import { useSwapRequests, useEmployees } from "@/lib/hooks";
+import { workWeek } from "@/lib/utils";
 import type { SwapRequest } from "@/types";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Clock }> = {
@@ -152,9 +153,7 @@ function RequestCard({ request, currentUserId, isAdmin, onAction, onDelete, show
           <Badge className={config.color}><StatusIcon className="h-3 w-3 mr-1" />{config.label}</Badge>
         </div>
         <CardDescription className="text-xs">
-          Week {request.initiatorWeek?.weekNumber} ({request.initiatorWeek && format(new Date(request.initiatorWeek.weekStart), "MMM d")})
-          {" ↔ "}
-          Week {request.targetWeek?.weekNumber} ({request.targetWeek && format(new Date(request.targetWeek.weekStart), "MMM d")})
+          {request.initiatorWeek && workWeek(request.initiatorWeek.weekStart).label}{" ↔ "}{request.targetWeek && workWeek(request.targetWeek.weekStart).label}
         </CardDescription>
       </CardHeader>
       <CardContent>

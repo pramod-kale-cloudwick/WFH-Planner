@@ -2,20 +2,23 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { format, formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Settings, LogOut, Home, Bell, MessageCircle, History, ArrowRightLeft, CalendarClock } from "lucide-react";
+import { Users, Settings, LogOut, Home, Bell, MessageCircle, History, ArrowRightLeft, CalendarClock, Compass } from "lucide-react";
 import { useSwapRequests, useEmployees } from "@/lib/hooks";
+import { startTour } from "@/lib/product-tour";
 import type { DateAnnotation, ScheduleNotification, SwapRequest } from "@/types";
 
 type BellItem = (DateAnnotation & { kind: "note" }) | (ScheduleNotification & { kind: "schedule" });
 
 export function Header() {
   const { data: session } = useSession();
+  const router = useRouter(), pathname = usePathname();
   const { employees } = useEmployees();
   const { requests: swapRequests } = useSwapRequests();
   const [notifications, setNotifications] = useState<BellItem[]>([]);
@@ -41,6 +44,7 @@ export function Header() {
   useEffect(() => { fetchNotifications(); const interval = setInterval(fetchNotifications, 30000); return () => clearInterval(interval); }, [fetchNotifications]);
 
   const markAsRead = () => { localStorage.setItem("lastSeenNotification", new Date().toISOString()); setUnreadCount(0); };
+  const handleTour = () => { if (pathname === "/") setTimeout(startTour, 200); else router.push("/?tour=1"); };
 
   return (
     <header className="border-b border-border bg-card">
@@ -51,19 +55,19 @@ export function Header() {
             WFH Planner
           </Link>
           <nav className="flex items-center gap-1">
-            <Link href="/" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
+            <Link href="/" data-tour="nav-dashboard" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
               <Home className="h-4 w-4" />Dashboard
             </Link>
-            <Link href="/employees" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
+            <Link href="/employees" data-tour="nav-employees" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
               <Users className="h-4 w-4" />Employees
             </Link>
-            <Link href="/settings" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
+            <Link href="/settings" data-tour="nav-settings" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
               <Settings className="h-4 w-4" />Settings
             </Link>
-            <Link href="/audit" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
+            <Link href="/audit" data-tour="nav-audit" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95">
               <History className="h-4 w-4" />Audit
             </Link>
-            <Link href="/swap-requests" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95 relative">
+            <Link href="/swap-requests" data-tour="nav-swaps" className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-muted transition-all duration-200 active:scale-95 relative">
               <ArrowRightLeft className="h-4 w-4" />Swaps
               {pendingSwapCount > 0 && <Badge className="h-5 px-1.5 text-[10px] bg-yellow-500 text-yellow-950">{pendingSwapCount}</Badge>}
             </Link>
@@ -71,7 +75,7 @@ export function Header() {
         </div>
         <div className="flex items-center gap-3">
           <Popover onOpenChange={(open) => open && markAsRead()}>
-            <PopoverTrigger className="relative p-2 rounded-full hover:bg-muted transition-colors">
+            <PopoverTrigger data-tour="bell" className="relative p-2 rounded-full hover:bg-muted transition-colors">
               <Bell className="h-5 w-5 text-muted-foreground" />
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-primary text-[10px] font-medium text-primary-foreground flex items-center justify-center animate-pulse">
@@ -112,7 +116,7 @@ export function Header() {
           </Popover>
 
           <DropdownMenu>
-            <DropdownMenuTrigger className="relative h-8 w-8 rounded-full focus:outline-none focus:ring-2 focus:ring-ring">
+            <DropdownMenuTrigger data-tour="profile" className="relative h-8 w-8 rounded-full focus:outline-none focus:ring-2 focus:ring-ring">
               <Avatar className="h-8 w-8">
                 <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || ""} />
                 <AvatarFallback>{initials}</AvatarFallback>
@@ -126,6 +130,9 @@ export function Header() {
                 </div>
               </div>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleTour}>
+                <Compass className="mr-2 h-4 w-4" />Take a tour
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
                 <LogOut className="mr-2 h-4 w-4" />Sign out
               </DropdownMenuItem>

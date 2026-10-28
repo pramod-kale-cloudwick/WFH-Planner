@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Undo2, ArrowLeftRight, History, Loader2 } from "lucide-react";
+import { workWeek } from "@/lib/utils";
 
 interface SwapRecord {
   id: string;
@@ -113,8 +114,8 @@ export default function AuditPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <span className="text-sm">Week {swap.weekNumber}</span>
-                            <span className="text-xs text-muted-foreground ml-2">({format(new Date(swap.weekStart), "MMM d")} - {format(new Date(swap.weekEnd), "MMM d")})</span>
+                            <span className="text-sm">Week {workWeek(swap.weekStart).number}</span>
+                            <span className="text-xs text-muted-foreground ml-2">({workWeek(swap.weekStart).range})</span>
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-muted-foreground">{formatDistanceToNow(new Date(swap.swappedAt), { addSuffix: true })}</span>

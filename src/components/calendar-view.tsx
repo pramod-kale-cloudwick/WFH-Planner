@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays, MessageCircle, X, Send, ArrowRightLeft, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, workWeek } from "@/lib/utils";
 import { useEmployees, useAllocations, useAnnotations } from "@/lib/hooks";
 import type { WeekAllocation, Employee, WeekDay, DateAnnotation, DayBump } from "@/types";
 
@@ -268,7 +268,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
       if (res.status === 409 && data.needsConfirm) { toast.warning(data.error, { duration: 10000, action: { label: "Move anyway", onClick: () => handleMember(day, employee, action, true) } }); return; }
       if (!res.ok) { toast.error(data.error || "Failed to update week"); return; }
       await mutateAllocations();
-      toast.success(`${employee.name} ${action === "add" ? "set to WFH" : "moved to office"} for week of ${format(weekStart, "MMM d")}`);
+      toast.success(`${employee.name} ${action === "add" ? "set to WFH" : "moved to office"} for ${workWeek(weekStart).label}`);
       setAdminSwapDialogOpen(false);
       setAssignEmpId("");
     } catch { toast.error("Failed to update week"); } finally { setPending(null); }
@@ -293,7 +293,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div data-tour="month-nav" className="flex items-center gap-2">
           <Button variant="outline" size="icon" className="transition-transform duration-200 hover:scale-105 active:scale-95" onClick={() => setCurrentDate(subMonths(currentDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
           <h2 className="text-xl font-semibold min-w-40 text-center">{format(currentDate, "MMMM yyyy")}</h2>
           <Button variant="outline" size="icon" className="transition-transform duration-200 hover:scale-105 active:scale-95" onClick={() => setCurrentDate(addMonths(currentDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
@@ -301,7 +301,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
         </div>
         {isAdmin && (
           <AlertDialog>
-            <AlertDialogTrigger disabled={loading || pending === "generate"} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 disabled:pointer-events-none disabled:opacity-50">
+            <AlertDialogTrigger data-tour="generate" disabled={loading || pending === "generate"} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 disabled:pointer-events-none disabled:opacity-50">
               <RefreshCw className={cn("h-4 w-4", (loading || pending === "generate") && "animate-spin")} />{pending === "generate" ? "Generating..." : "Generate Schedule"}
             </AlertDialogTrigger>
             <AlertDialogContent>
@@ -325,7 +325,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
           </p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
+        <div data-tour="calendar-grid" className="border rounded-lg overflow-hidden">
           <div className="grid grid-cols-7 bg-muted/50">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => (
               <div key={day} className={cn("px-2 py-3 text-center text-xs font-medium uppercase tracking-wide", (i === 0 || i === 6) && "text-muted-foreground/50")}>
@@ -427,7 +427,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
       )}
 
       <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-4">
-        <div className="flex flex-wrap items-center gap-2">
+        <div data-tour="legend" className="flex flex-wrap items-center gap-2">
           {rotatingEmployees.map((emp) => {
             const empColor = employeeColorMap.get(emp.id) || "#6366F1";
             return (
@@ -441,7 +441,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
       </div>
 
       {employeesWithFixedDays.length > 0 && (
-        <div className="border-t pt-4 animate-in fade-in duration-500">
+        <div data-tour="fixed-days" className="border-t pt-4 animate-in fade-in duration-500">
           <h3 className="text-sm font-medium mb-2 text-muted-foreground">Fixed Office Days (every week)</h3>
           <div className="flex flex-wrap gap-3">
             {(["monday", "tuesday", "wednesday", "thursday", "friday"] as WeekDay[]).map((day) => {
@@ -468,7 +468,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
             <div>
               <p className="text-sm text-muted-foreground mb-2">Your current week:</p>
               <Badge variant="outline" className="text-sm">
-                Week {selectedSelfAllocation?.weekNumber} ({selectedSelfAllocation && format(selectedSelfAllocation.weekStart, "MMM d")} - {selectedSelfAllocation && format(selectedSelfAllocation.weekEnd, "MMM d")})
+                {selectedSelfAllocation && workWeek(selectedSelfAllocation.weekStart).label}
               </Badge>
             </div>
 
@@ -477,13 +477,13 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
               <Select value={targetWeekId} onValueChange={(v) => { setTargetWeekId(v || ""); setTargetEmployeeId(""); }}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Choose a week to swap into">
-                    {targetWeekId && (() => { const w = futureWeeksForSwap.find((w) => w.id === targetWeekId); return w ? `Week ${w.weekNumber} (${format(w.weekStart, "MMM d")} - ${format(w.weekEnd, "MMM d")})` : ""; })()}
+                    {targetWeekId && (() => { const w = futureWeeksForSwap.find((w) => w.id === targetWeekId); return w ? workWeek(w.weekStart).label : ""; })()}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {futureWeeksForSwap.map((w) => (
                     <SelectItem key={w.id} value={w.id}>
-                      Week {w.weekNumber} ({format(w.weekStart, "MMM d")} - {format(w.weekEnd, "MMM d")})
+                      {workWeek(w.weekStart).label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -528,7 +528,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
             <div>
               <p className="text-sm text-muted-foreground mb-2">Swapping:</p>
               <Badge variant="outline" className="text-sm">
-                {adminSelectedEmp?.employee.name} — Week {adminSelectedEmp?.allocation.weekNumber} ({adminSelectedEmp && format(adminSelectedEmp.allocation.weekStart, "MMM d")})
+                {adminSelectedEmp?.employee.name} — {adminSelectedEmp && workWeek(adminSelectedEmp.allocation.weekStart).label}
               </Badge>
             </div>
 
@@ -537,13 +537,13 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
               <Select value={targetWeekId} onValueChange={(v) => { setTargetWeekId(v || ""); setTargetEmployeeId(""); }}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Choose a week">
-                    {targetWeekId && (() => { const w = futureWeeksForSwap.find((w) => w.id === targetWeekId); return w ? `Week ${w.weekNumber} (${format(w.weekStart, "MMM d")} - ${format(w.weekEnd, "MMM d")})` : ""; })()}
+                    {targetWeekId && (() => { const w = futureWeeksForSwap.find((w) => w.id === targetWeekId); return w ? workWeek(w.weekStart).label : ""; })()}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {futureWeeksForSwap.map((w) => (
                     <SelectItem key={w.id} value={w.id}>
-                      Week {w.weekNumber} ({format(w.weekStart, "MMM d")} - {format(w.weekEnd, "MMM d")})
+                      {workWeek(w.weekStart).label}
                     </SelectItem>
                   ))}
                 </SelectContent>

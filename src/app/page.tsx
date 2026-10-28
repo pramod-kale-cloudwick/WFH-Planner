@@ -2,6 +2,7 @@
 
 import { Header } from "@/components/header";
 import { CalendarView } from "@/components/calendar-view";
+import { ProductTour } from "@/components/product-tour";
 
 export default function DashboardPage() {
   return (
@@ -13,6 +14,7 @@ export default function DashboardPage() {
           <p className="text-muted-foreground">View and manage weekly WFH schedules</p>
         </div>
         <CalendarView />
+        <ProductTour />
       </main>
     </div>
   );
