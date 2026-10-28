@@ -13,9 +13,9 @@ import { Plus, Pencil, X, AlertTriangle } from "lucide-react";
 import type { WfhType, WeekDay } from "@/types";
 
 const WFH_TYPE_WARNINGS: Record<WfhType, string> = {
-  permanent_wfo: "You'll be removed from all future WFH weeks. You'll always work from office.",
-  permanent_wfh: "You'll be removed from the rotation. You'll always work from home.",
-  rotating: "You'll be added to the rotation pool. Run 'Generate Schedule' to get assigned WFH weeks.",
+  permanent_wfo: "You'll always work from office. Schedule re-plans from the week after next.",
+  permanent_wfh: "You'll always work from home. Schedule re-plans from the week after next.",
+  rotating: "You'll join the rotation in alphabetical order. Schedule re-plans from the week after next.",
 };
 
 const WEEKDAYS: { value: WeekDay; label: string }[] = [
@@ -65,14 +65,10 @@ export function EmployeeForm({ onSuccess, initialData, mode = "button", isSelfEd
     try {
       const url = initialData ? `/api/employees/${initialData.id}` : "/api/employees";
       const method = initialData ? "PUT" : "POST";
-      await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, email, designation, wfhType, fixedDays, color: color || undefined }) });
-
-      // Handle cascading updates if wfhType changed
-      if (initialData && wfhTypeChanged && originalWfhType) {
-        const cascadeRes = await fetch(`/api/employees/${initialData.id}/cascade`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ oldWfhType: originalWfhType, newWfhType: wfhType }) });
-        const cascadeData = await cascadeRes.json();
-        if (cascadeData.message) toast.info(cascadeData.message, { duration: 5000 });
-      }
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, email, designation, wfhType, fixedDays, color: color || undefined }) });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || "Failed to save employee"); return; }
+      if (data.message) toast.info(data.message, { duration: 5000 });
 
       onSuccess();
       setOpen(false);
@@ -159,7 +155,7 @@ export function EmployeeForm({ onSuccess, initialData, mode = "button", isSelfEd
             {color && <div className="flex items-center gap-2"><span className="w-4 h-4 rounded" style={{ backgroundColor: color }} /><span className="text-xs text-muted-foreground">{color}</span></div>}
           </div>
           <div className="space-y-2">
-            <Label>Fixed WFH Days <span className="text-muted-foreground text-xs">(every week, regardless of rotation)</span></Label>
+            <Label>Fixed Office Days <span className="text-muted-foreground text-xs">(in office every week, even on WFH weeks)</span></Label>
             <div className="flex flex-wrap gap-2">
               {WEEKDAYS.map((day) => (
                 <Badge

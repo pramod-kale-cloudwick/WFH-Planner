@@ -30,6 +30,19 @@ export interface WeekAllocation {
   createdAt: Date;
   employees: Employee[];
   swaps?: SwapInfo[];
+  bumps?: DayBump[];
+}
+
+export interface DayBump {
+  date: string;
+  employee: Employee;
+  forName?: string;
+}
+
+export interface ScheduleNotification {
+  id: string;
+  message: string;
+  createdAt: Date;
 }
 
 export interface Settings {

@@ -8,15 +8,17 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Settings, LogOut, Home, Bell, MessageCircle, History, ArrowRightLeft } from "lucide-react";
+import { Users, Settings, LogOut, Home, Bell, MessageCircle, History, ArrowRightLeft, CalendarClock } from "lucide-react";
 import { useSwapRequests, useEmployees } from "@/lib/hooks";
-import type { DateAnnotation, SwapRequest } from "@/types";
+import type { DateAnnotation, ScheduleNotification, SwapRequest } from "@/types";
+
+type BellItem = (DateAnnotation & { kind: "note" }) | (ScheduleNotification & { kind: "schedule" });
 
 export function Header() {
   const { data: session } = useSession();
   const { employees } = useEmployees();
   const { requests: swapRequests } = useSwapRequests();
-  const [notifications, setNotifications] = useState<DateAnnotation[]>([]);
+  const [notifications, setNotifications] = useState<BellItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const initials = session?.user?.name?.split(" ").map((n) => n[0]).join("").toUpperCase() || "U";
   const isAdmin = session?.user?.isAdmin ?? false;
@@ -27,16 +29,12 @@ export function Header() {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch("/api/annotations/recent");
-      const data = await res.json();
+      const [notes, schedule] = await Promise.all([fetch("/api/annotations/recent").then((r) => r.json()), fetch("/api/notifications").then((r) => (r.ok ? r.json() : []))]);
+      const data: BellItem[] = [...(notes as DateAnnotation[]).map((n) => ({ ...n, kind: "note" as const })), ...(schedule as ScheduleNotification[]).map((n) => ({ ...n, kind: "schedule" as const }))]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setNotifications(data);
       const lastSeen = localStorage.getItem("lastSeenNotification");
-      if (lastSeen) {
-        const count = data.filter((n: DateAnnotation) => new Date(n.createdAt) > new Date(lastSeen)).length;
-        setUnreadCount(count);
-      } else {
-        setUnreadCount(data.length);
-      }
+      setUnreadCount(lastSeen ? data.filter((n) => new Date(n.createdAt) > new Date(lastSeen)).length : data.length);
     } catch { /* ignore */ }
   }, []);
 
@@ -83,24 +81,26 @@ export function Header() {
             </PopoverTrigger>
             <PopoverContent className="w-80 p-0" align="end">
               <div className="p-3 border-b">
-                <h4 className="text-sm font-semibold">Recent Notes</h4>
-                <p className="text-xs text-muted-foreground">Latest comments on calendar dates</p>
+                <h4 className="text-sm font-semibold">Notifications</h4>
+                <p className="text-xs text-muted-foreground">Schedule changes and calendar notes</p>
               </div>
               <div className="max-h-80 overflow-y-auto">
                 {notifications.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-muted-foreground">No notes yet</div>
+                  <div className="p-4 text-center text-sm text-muted-foreground">Nothing new</div>
                 ) : (
                   notifications.map((n) => (
                     <div key={n.id} className="p-3 border-b last:border-0 hover:bg-muted/50 transition-colors">
                       <div className="flex items-start gap-2">
-                        <MessageCircle className="h-4 w-4 mt-0.5 text-yellow-400 shrink-0" />
+                        {n.kind === "schedule" ? <CalendarClock className="h-4 w-4 mt-0.5 text-primary shrink-0" /> : <MessageCircle className="h-4 w-4 mt-0.5 text-yellow-400 shrink-0" />}
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm truncate">{n.message}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xs text-muted-foreground">{n.authorName}</span>
-                            <span className="text-xs text-muted-foreground">•</span>
-                            <span className="text-xs font-medium text-primary">{format(new Date(n.date), "MMM d")}</span>
-                          </div>
+                          <p className={n.kind === "schedule" ? "text-sm" : "text-sm truncate"}>{n.message}</p>
+                          {n.kind === "note" && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-muted-foreground">{n.authorName}</span>
+                              <span className="text-xs text-muted-foreground">•</span>
+                              <span className="text-xs font-medium text-primary">{format(new Date(n.date), "MMM d")}</span>
+                            </div>
+                          )}
                           <p className="text-[10px] text-muted-foreground/70 mt-0.5">{formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}</p>
                         </div>
                       </div>

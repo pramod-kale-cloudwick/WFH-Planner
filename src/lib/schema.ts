@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
 // NextAuth required tables
@@ -80,6 +80,22 @@ export const swapHistory = sqliteTable("swap_history", {
   toEmployeeId: text("to_employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
   swappedAt: integer("swapped_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
+
+// One-day WFH given to an in-office employee so a WFH-week employee can use a fixed office day
+export const dayBumps = sqliteTable("day_bumps", {
+  id: text("id").primaryKey(),
+  allocationId: text("allocation_id").notNull().references(() => weekAllocations.id, { onDelete: "cascade" }),
+  date: text("date").notNull(),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  forEmployeeId: text("for_employee_id").references(() => employees.id, { onDelete: "set null" }),
+});
+
+export const notifications = sqliteTable("notifications", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  message: text("message").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+}, (t) => [index("notifications_employee_idx").on(t.employeeId, t.createdAt)]);
 
 export const dateAnnotations = sqliteTable("date_annotations", {
   id: text("id").primaryKey(),

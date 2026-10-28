@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { employees } from "@/lib/schema";
-import { asc, max } from "drizzle-orm";
+import { max, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { isAdmin } from "@/lib/auth-utils";
+import { rebalanceSchedule } from "@/lib/allocation-engine";
 
 const ALL_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4", "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16"];
 
@@ -15,7 +16,7 @@ function getUniqueColor(usedColors: string[]): string {
 
 export async function GET() {
   try {
-    const allEmployees = await db.select().from(employees).orderBy(asc(employees.rotationOrder));
+    const allEmployees = await db.select().from(employees).orderBy(sql`lower(${employees.name})`);
     const parsed = allEmployees.map((emp) => ({ ...emp, fixedDays: JSON.parse(emp.fixedDays || "[]") }));
     return NextResponse.json(parsed);
   } catch {
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
       color: assignedColor,
     }).returning();
 
+    await rebalanceSchedule(`${name} joined`).catch(console.error);
     return NextResponse.json({ ...newEmployee[0], fixedDays: JSON.parse(newEmployee[0].fixedDays || "[]") }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed to create employee" }, { status: 500 });

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Undo2, ArrowLeftRight, History } from "lucide-react";
+import { Undo2, ArrowLeftRight, History, Loader2 } from "lucide-react";
 
 interface SwapRecord {
   id: string;
@@ -123,7 +123,7 @@ export default function AuditPage() {
                             <TableCell>
                               <AlertDialog>
                                 <AlertDialogTrigger disabled={undoing === swap.id} className="inline-flex items-center justify-center gap-1 text-sm text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 px-2 py-1 rounded-md transition-colors disabled:opacity-50">
-                                  <Undo2 className="h-4 w-4" />Undo
+                                  {undoing === swap.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}{undoing === swap.id ? "Undoing..." : "Undo"}
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                   <AlertDialogHeader>

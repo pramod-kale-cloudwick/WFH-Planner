@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useSession } from "next-auth/react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { ArrowRightLeft, Check, X, Clock, Trash2 } from "lucide-react";
+import { ArrowRightLeft, Check, X, Clock, Trash2, Loader2 } from "lucide-react";
 import { useSwapRequests, useEmployees } from "@/lib/hooks";
 import type { SwapRequest } from "@/types";
 
@@ -27,25 +27,29 @@ export default function SwapRequestsPage() {
   const isAdmin = session?.user?.isAdmin ?? false;
   const userEmail = session?.user?.email;
   const currentUser = employees.find((e) => e.email === userEmail);
+  const [pending, setPending] = useState<{ id: string; action: PendingAction } | null>(null);
 
   const handleAction = useCallback(async (id: string, action: "approve" | "reject") => {
+    setPending({ id, action });
     try {
       const res = await fetch(`/api/swap-requests/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || "Action failed"); return; }
+      await mutate();
       toast.success(data.message);
-      mutate();
-    } catch { toast.error("Action failed"); }
+    } catch { toast.error("Action failed"); } finally { setPending(null); }
   }, [mutate]);
 
   const handleDelete = useCallback(async (id: string) => {
+    setPending({ id, action: "cancel" });
     try {
       const res = await fetch(`/api/swap-requests/${id}`, { method: "DELETE" });
       if (!res.ok) { const data = await res.json(); toast.error(data.error || "Failed to cancel"); return; }
+      await mutate();
       toast.success("Request cancelled");
-      mutate();
-    } catch { toast.error("Failed to cancel"); }
+    } catch { toast.error("Failed to cancel"); } finally { setPending(null); }
   }, [mutate]);
+  const pendingFor = (id: string) => (pending?.id === id ? pending.action : null);
 
   const pendingForMe = requests.filter((r: SwapRequest) => (r.status === "pending_target" && r.targetId === currentUser?.id) || (r.status === "pending_admin" && isAdmin));
   const myRequests = requests.filter((r: SwapRequest) => r.initiatorId === currentUser?.id);
@@ -78,7 +82,7 @@ export default function SwapRequestsPage() {
                 </h2>
                 <div className="grid gap-4">
                   {pendingForMe.map((req: SwapRequest) => (
-                    <RequestCard key={req.id} request={req} currentUserId={currentUser?.id} isAdmin={isAdmin} onAction={handleAction} onDelete={handleDelete} showActions />
+                    <RequestCard key={req.id} request={req} currentUserId={currentUser?.id} isAdmin={isAdmin} onAction={handleAction} onDelete={handleDelete} pending={pendingFor(req.id)} showActions />
                   ))}
                 </div>
               </section>
@@ -92,7 +96,7 @@ export default function SwapRequestsPage() {
               ) : (
                 <div className="grid gap-4">
                   {myRequests.map((req: SwapRequest) => (
-                    <RequestCard key={req.id} request={req} currentUserId={currentUser?.id} isAdmin={isAdmin} onAction={handleAction} onDelete={handleDelete} canCancel />
+                    <RequestCard key={req.id} request={req} currentUserId={currentUser?.id} isAdmin={isAdmin} onAction={handleAction} onDelete={handleDelete} pending={pendingFor(req.id)} canCancel />
                   ))}
                 </div>
               )}
@@ -116,8 +120,11 @@ export default function SwapRequestsPage() {
   );
 }
 
+type PendingAction = "approve" | "reject" | "cancel";
+
 interface RequestCardProps {
   request: SwapRequest;
+  pending?: PendingAction | null;
   currentUserId?: string;
   isAdmin: boolean;
   onAction: (id: string, action: "approve" | "reject") => void;
@@ -126,7 +133,8 @@ interface RequestCardProps {
   canCancel?: boolean;
 }
 
-function RequestCard({ request, currentUserId, isAdmin, onAction, onDelete, showActions, canCancel }: RequestCardProps) {
+function RequestCard({ request, currentUserId, isAdmin, onAction, onDelete, showActions, canCancel, pending }: RequestCardProps) {
+  const spin = <Loader2 className="h-4 w-4 animate-spin" />;
   const config = STATUS_CONFIG[request.status];
   const StatusIcon = config.icon;
   const canAct = showActions && ((request.status === "pending_target" && request.targetId === currentUserId) || (request.status === "pending_admin" && isAdmin));
@@ -156,8 +164,8 @@ function RequestCard({ request, currentUserId, isAdmin, onAction, onDelete, show
             {canAct && (
               <>
                 <AlertDialog>
-                  <AlertDialogTrigger className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-sm font-medium h-8 px-3 border border-input bg-background shadow-xs hover:bg-accent text-red-400 hover:text-red-300 hover:bg-red-500/10">
-                    <X className="h-4 w-4" />Reject
+                  <AlertDialogTrigger disabled={!!pending} className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-sm font-medium h-8 px-3 border border-input bg-background shadow-xs hover:bg-accent text-red-400 hover:text-red-300 hover:bg-red-500/10 disabled:opacity-50 disabled:pointer-events-none">
+                    {pending === "reject" ? spin : <X className="h-4 w-4" />}{pending === "reject" ? "Rejecting..." : "Reject"}
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
@@ -170,15 +178,15 @@ function RequestCard({ request, currentUserId, isAdmin, onAction, onDelete, show
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
-                <Button size="sm" onClick={() => onAction(request.id, "approve")} className="bg-green-600 hover:bg-green-500">
-                  <Check className="h-4 w-4 mr-1" />Approve
+                <Button size="sm" disabled={!!pending} onClick={() => onAction(request.id, "approve")} className="bg-green-600 hover:bg-green-500 gap-1">
+                  {pending === "approve" ? spin : <Check className="h-4 w-4" />}{pending === "approve" ? "Approving..." : "Approve"}
                 </Button>
               </>
             )}
             {canDelete && (
               <AlertDialog>
-                <AlertDialogTrigger className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-sm font-medium h-8 px-2 hover:bg-accent text-muted-foreground hover:text-red-400">
-                  <Trash2 className="h-4 w-4" />
+                <AlertDialogTrigger disabled={!!pending} className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-sm font-medium h-8 px-2 hover:bg-accent text-muted-foreground hover:text-red-400 disabled:opacity-50 disabled:pointer-events-none">
+                  {pending === "cancel" ? spin : <Trash2 className="h-4 w-4" />}
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>

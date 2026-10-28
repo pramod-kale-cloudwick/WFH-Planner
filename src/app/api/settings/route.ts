@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { settings } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth-utils";
+import { rebalanceSchedule } from "@/lib/allocation-engine";
 
 export async function GET() {
   try {
@@ -35,6 +36,7 @@ export async function PUT(request: NextRequest) {
       ...(weekCycleLength !== undefined && { weekCycleLength }),
     }).where(eq(settings.id, existing[0].id)).returning();
 
+    if (updated[0].availableSeats !== existing[0].availableSeats) await rebalanceSchedule(`seats changed to ${updated[0].availableSeats}`).catch(console.error);
     return NextResponse.json(updated[0]);
   } catch {
     return NextResponse.json({ error: "Failed to update settings" }, { status: 500 });

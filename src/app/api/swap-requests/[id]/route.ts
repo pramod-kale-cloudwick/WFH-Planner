@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { swapRequests, employees, allocationEmployees, swapHistory } from "@/lib/schema";
-import { eq, and } from "drizzle-orm";
+import { swapRequests, employees } from "@/lib/schema";
+import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { nanoid } from "nanoid";
+import { swapEmployees } from "@/lib/allocation-engine";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -49,18 +49,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return NextResponse.json({ success: true, message: "Swap request rejected by admin" });
       }
 
-      // Admin approved - execute the swap
-      // Update allocation_employees: swap initiator into target's week and target into initiator's week
-      await db.update(allocationEmployees).set({ employeeId: req.targetId }).where(and(eq(allocationEmployees.allocationId, req.initiatorAllocationId), eq(allocationEmployees.employeeId, req.initiatorId)));
-      await db.update(allocationEmployees).set({ employeeId: req.initiatorId }).where(and(eq(allocationEmployees.allocationId, req.targetAllocationId), eq(allocationEmployees.employeeId, req.targetId)));
+      const result = await swapEmployees(req.initiatorAllocationId, req.initiatorId, req.targetAllocationId, req.targetId);
+      if (!result.success) return NextResponse.json({ error: result.error }, { status: 400 });
 
-      // Record in swap history
-      await db.insert(swapHistory).values([
-        { id: nanoid(), allocationId: req.initiatorAllocationId, fromEmployeeId: req.initiatorId, toEmployeeId: req.targetId },
-        { id: nanoid(), allocationId: req.targetAllocationId, fromEmployeeId: req.targetId, toEmployeeId: req.initiatorId },
-      ]);
-
-      // Mark request as approved
       await db.update(swapRequests).set({ status: "approved", updatedAt: new Date() }).where(eq(swapRequests.id, id));
       return NextResponse.json({ success: true, message: "Swap completed successfully" });
     }

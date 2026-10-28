@@ -11,10 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays, MessageCircle, X, Send, ArrowRightLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays, MessageCircle, X, Send, ArrowRightLeft, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEmployees, useAllocations, useAnnotations } from "@/lib/hooks";
-import type { WeekAllocation, Employee, WeekDay, DateAnnotation } from "@/types";
+import type { WeekAllocation, Employee, WeekDay, DateAnnotation, DayBump } from "@/types";
 
 const DEFAULT_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4", "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16"];
 
@@ -74,6 +74,8 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
   // Admin direct swap state
   const [adminSwapDialogOpen, setAdminSwapDialogOpen] = useState(false);
   const [adminSelectedEmp, setAdminSelectedEmp] = useState<{ employee: Employee; allocation: WeekAllocation } | null>(null);
+  const [assignEmpId, setAssignEmpId] = useState("");
+  const [pending, setPending] = useState<string | null>(null);
 
   // Get current user's employee record
   const currentUserEmployee = useMemo(() => employees.find((e) => e.email === userEmail), [employees, userEmail]);
@@ -107,10 +109,15 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
     return eachDayOfInterval({ start: calStart, end: calEnd });
   }, [currentDate]);
 
-  const getWfhEmployeesForDay = useCallback((day: Date): Employee[] => {
+  // WFH-week employees with a fixed office day are in office that day; bumped employees take their WFH slot
+  const getWfhForDay = useCallback((day: Date): { wfh: Employee[]; bumped: DayBump[] } => {
     const allocation = allocations.find((a) => isSameWeek(day, a.weekStart, { weekStartsOn: 0 }));
-    return allocation?.employees || [];
+    if (!allocation) return { wfh: [], bumped: [] };
+    const weekDay = format(day, "EEEE").toLowerCase() as WeekDay, dateStr = format(day, "yyyy-MM-dd");
+    return { wfh: allocation.employees.filter((e) => !e.fixedDays?.includes(weekDay)), bumped: allocation.bumps?.filter((b) => b.date === dateStr) ?? [] };
   }, [allocations]);
+
+  const getAssignable = useCallback((allocation: WeekAllocation | null) => employees.filter((e) => e.isActive && e.wfhType !== "permanent_wfh" && !allocation?.employees.some((a) => a.id === e.id)), [employees]);
 
   const getAllocationForDay = useCallback((day: Date): WeekAllocation | null => {
     return allocations.find((a) => isSameWeek(day, a.weekStart, { weekStartsOn: 0 })) || null;
@@ -155,12 +162,13 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
   };
 
   const handleDeleteAnnotation = async (id: string) => {
+    setPending(`note:${id}`);
     try {
       const res = await fetch(`/api/annotations/${id}`, { method: "DELETE" });
       if (!res.ok) { toast.error("Failed to delete note"); return; }
-      mutateAnnotations();
+      await mutateAnnotations();
       toast.success("Note deleted");
-    } catch { toast.error("Failed to delete note"); }
+    } catch { toast.error("Failed to delete note"); } finally { setPending(null); }
   };
 
   const handleEmployeeClick = (day: Date, employee: Employee) => {
@@ -210,12 +218,12 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
         toast.error(data.error || "Swap failed");
         return;
       }
+      await mutateAllocations();
       toast.success(`Swapped ${adminSelectedEmp.employee.name} successfully. Affected employees will be notified.`);
       setAdminSwapDialogOpen(false);
       setAdminSelectedEmp(null);
       setTargetWeekId("");
       setTargetEmployeeId("");
-      mutateAllocations();
       onSwapComplete?.();
     } catch {
       toast.error("Swap failed");
@@ -251,12 +259,31 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
     }
   };
 
-  const handleGenerate = async () => {
-    await fetch("/api/allocations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ weeksCount: 20 }) });
-    mutateAllocations();
-    mutateEmployees();
-    toast.success("Schedule generated");
+  const handleMember = async (day: Date, employee: Employee, action: "add" | "remove", force = false) => {
+    const weekStart = startOfWeek(day, { weekStartsOn: 0 });
+    setPending(action);
+    try {
+      const res = await fetch("/api/allocations/members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ weekStart: format(weekStart, "yyyy-MM-dd"), employeeId: employee.id, action, force }) });
+      const data = await res.json();
+      if (res.status === 409 && data.needsConfirm) { toast.warning(data.error, { duration: 10000, action: { label: "Move anyway", onClick: () => handleMember(day, employee, action, true) } }); return; }
+      if (!res.ok) { toast.error(data.error || "Failed to update week"); return; }
+      await mutateAllocations();
+      toast.success(`${employee.name} ${action === "add" ? "set to WFH" : "moved to office"} for week of ${format(weekStart, "MMM d")}`);
+      setAdminSwapDialogOpen(false);
+      setAssignEmpId("");
+    } catch { toast.error("Failed to update week"); } finally { setPending(null); }
   };
+
+  const handleGenerate = async () => {
+    setPending("generate");
+    try {
+      const res = await fetch("/api/allocations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ weeksCount: 20 }) });
+      if (!res.ok) { toast.error("Failed to generate schedule"); return; }
+      await Promise.all([mutateAllocations(), mutateEmployees()]);
+      toast.success("Schedule generated");
+    } catch { toast.error("Failed to generate schedule"); } finally { setPending(null); }
+  };
+  const busy = submittingSwap || pending === "add" || pending === "remove";
 
   const today = new Date();
   const rotatingEmployees = employees.filter((e) => e.wfhType === "rotating" && e.isActive);
@@ -274,8 +301,8 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
         </div>
         {isAdmin && (
           <AlertDialog>
-            <AlertDialogTrigger disabled={loading} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 disabled:pointer-events-none disabled:opacity-50">
-              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />Generate Schedule
+            <AlertDialogTrigger disabled={loading || pending === "generate"} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 disabled:pointer-events-none disabled:opacity-50">
+              <RefreshCw className={cn("h-4 w-4", (loading || pending === "generate") && "animate-spin")} />{pending === "generate" ? "Generating..." : "Generate Schedule"}
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
@@ -311,7 +338,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
               const isCurrentMonth = isSameMonth(day, currentDate);
               const isToday = isSameDay(day, today);
               const weekend = isWeekend(day);
-              const wfhEmps = getWfhEmployeesForDay(day);
+              const { wfh: wfhEmps, bumped } = getWfhForDay(day);
               const allocation = getAllocationForDay(day);
               const currentWeekStart = startOfWeek(today, { weekStartsOn: 0 });
               const dayWeekStart = startOfWeek(day, { weekStartsOn: 0 });
@@ -326,7 +353,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
                       <div className={cn("text-sm font-semibold mb-1", !isCurrentMonth && "text-muted-foreground/50", weekend && "text-muted-foreground/40")}>
                         {format(day, "d")}
                       </div>
-                      {!weekend && isCurrentMonth && wfhEmps.length > 0 && (
+                      {!weekend && isCurrentMonth && (wfhEmps.length > 0 || bumped.length > 0) && (
                         <div className="flex flex-wrap gap-1">
                           {wfhEmps.map((emp) => {
                             const empColor = employeeColorMap.get(emp.id) || "#6366F1";
@@ -335,6 +362,14 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
                             return (
                               <Badge key={emp.id} variant="secondary" className={cn("text-[10px] px-1.5 py-0 transition-all duration-150", canSwap && "cursor-pointer hover:ring-2 hover:ring-primary", isPastWeek && "opacity-50", !canSwap && "cursor-default")} style={{ backgroundColor: `${empColor}33`, color: empColor }} onClick={(e) => { e.stopPropagation(); if (canSwap) handleEmployeeClick(day, emp); }}>
                                 {emp.name}{canSwap && <ArrowRightLeft className="inline h-2.5 w-2.5 ml-1 opacity-60" />}
+                              </Badge>
+                            );
+                          })}
+                          {bumped.map((b) => {
+                            const empColor = employeeColorMap.get(b.employee.id) || "#6366F1";
+                            return (
+                              <Badge key={`bump-${b.employee.id}`} variant="outline" title={`1-day WFH${b.forName ? ` — seat given to ${b.forName} (fixed office day)` : ""}`} className={cn("text-[10px] px-1.5 py-0 border-dashed cursor-default", isPastWeek && "opacity-50")} style={{ borderColor: empColor, color: empColor }} onClick={(e) => e.stopPropagation()}>
+                                {b.employee.name} · 1d
                               </Badge>
                             );
                           })}
@@ -348,13 +383,29 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
                           <span className="text-sm font-medium">{format(day, "MMM d, yyyy")}</span>
                           <Badge variant="outline" className="text-[10px]">{dayAnnotations.length} note{dayAnnotations.length !== 1 ? "s" : ""}</Badge>
                         </div>
+                        {isAdmin && !isPastWeek && !weekend && (
+                          <div className="space-y-2 border-b pb-3">
+                            <p className="text-xs font-medium text-muted-foreground">Assign WFH for week of {format(dayWeekStart, "MMM d")}</p>
+                            <div className="flex gap-2">
+                              <Select value={assignEmpId} onValueChange={(v) => setAssignEmpId(v || "")}>
+                                <SelectTrigger className="h-8 text-sm flex-1">
+                                  <SelectValue placeholder="Choose employee">{assignEmpId && employees.find((e) => e.id === assignEmpId)?.name}</SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getAssignable(allocation).map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                              <Button size="sm" className="h-8" disabled={!assignEmpId || pending === "add"} onClick={() => { const emp = employees.find((e) => e.id === assignEmpId); if (emp) handleMember(day, emp, "add"); }}>{pending === "add" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add"}</Button>
+                            </div>
+                          </div>
+                        )}
                         {dayAnnotations.length > 0 && (
                           <div className="space-y-2 max-h-40 overflow-y-auto">
                             {dayAnnotations.map((ann) => (
                               <div key={ann.id} className="bg-muted/50 rounded-md p-2 text-sm group relative">
                                 <p className="pr-5">{ann.message}</p>
                                 <p className="text-[10px] text-muted-foreground mt-1">— {ann.authorName}</p>
-                                <button onClick={() => handleDeleteAnnotation(ann.id)} className="absolute top-1 right-1 p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-destructive/20 text-destructive transition-all"><X className="h-3 w-3" /></button>
+                                <button onClick={() => handleDeleteAnnotation(ann.id)} disabled={pending === `note:${ann.id}`} className={cn("absolute top-1 right-1 p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-destructive/20 text-destructive transition-all", pending === `note:${ann.id}` && "opacity-100")}>{pending === `note:${ann.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}</button>
                               </div>
                             ))}
                           </div>
@@ -362,7 +413,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
                         <div className="flex gap-2">
                           <Input placeholder="Add a note..." value={newAnnotation} onChange={(e) => setNewAnnotation(e.target.value)} className="h-8 text-sm" onKeyDown={(e) => e.key === "Enter" && handleAddAnnotation(day)} />
                           <Button size="icon" className="h-8 w-8 shrink-0" onClick={() => handleAddAnnotation(day)} disabled={savingAnnotation || !newAnnotation.trim()}>
-                            <Send className="h-3 w-3" />
+                            {savingAnnotation ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
                           </Button>
                         </div>
                       </div>
@@ -391,7 +442,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
 
       {employeesWithFixedDays.length > 0 && (
         <div className="border-t pt-4 animate-in fade-in duration-500">
-          <h3 className="text-sm font-medium mb-2 text-muted-foreground">Fixed WFH Days (every week)</h3>
+          <h3 className="text-sm font-medium mb-2 text-muted-foreground">Fixed Office Days (every week)</h3>
           <div className="flex flex-wrap gap-3">
             {(["monday", "tuesday", "wednesday", "thursday", "friday"] as WeekDay[]).map((day) => {
               const emps = getEmployeesByDay(day);
@@ -460,7 +511,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setSwapDialogOpen(false)}>Cancel</Button>
               <Button onClick={handleSubmitSwapRequest} disabled={submittingSwap || !targetWeekId || !targetEmployeeId}>
-                {submittingSwap ? "Sending..." : "Send Request"}
+                {submittingSwap && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}{submittingSwap ? "Sending..." : "Send Request"}
               </Button>
             </div>
           </div>
@@ -520,9 +571,12 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
             <p className="text-xs text-muted-foreground">This swap will be executed immediately. Both employees will be notified.</p>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setAdminSwapDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleAdminDirectSwap} disabled={submittingSwap || !targetWeekId || !targetEmployeeId}>
-                {submittingSwap ? "Swapping..." : "Swap Now"}
+              <Button variant="destructive" className="mr-auto" disabled={busy} onClick={() => adminSelectedEmp && handleMember(adminSelectedEmp.allocation.weekStart, adminSelectedEmp.employee, "remove")}>
+                {pending === "remove" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}{pending === "remove" ? "Moving..." : "Move to office"}
+              </Button>
+              <Button variant="outline" disabled={busy} onClick={() => setAdminSwapDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleAdminDirectSwap} disabled={busy || !targetWeekId || !targetEmployeeId}>
+                {submittingSwap && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}{submittingSwap ? "Swapping..." : "Swap Now"}
               </Button>
             </div>
           </div>

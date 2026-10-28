@@ -8,7 +8,7 @@ import { EmployeeForm } from "@/components/employee-form";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import type { Employee, WfhType } from "@/types";
 
 const wfhTypeLabels: Record<WfhType, string> = { rotating: "Rotating", permanent_wfh: "Permanent WFH", permanent_wfo: "Permanent WFO" };
@@ -18,6 +18,7 @@ export default function EmployeesPage() {
   const { data: session } = useSession();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const isAdmin = session?.user?.isAdmin ?? false;
   const userEmail = session?.user?.email;
 
@@ -35,21 +36,15 @@ export default function EmployeesPage() {
   const handleDelete = async (id: string, name: string) => {
     toast.warning(`Delete ${name}?`, {
       action: { label: "Delete", onClick: async () => {
-        await fetch(`/api/employees/${id}`, { method: "DELETE" });
-        fetchEmployees();
-        toast.success("Employee deleted");
+        setDeletingId(id);
+        try {
+          const res = await fetch(`/api/employees/${id}`, { method: "DELETE" });
+          if (!res.ok) { toast.error((await res.json()).error ?? "Failed to delete employee"); return; }
+          await fetchEmployees();
+          toast.success("Employee deleted");
+        } catch { toast.error("Failed to delete employee"); } finally { setDeletingId(null); }
       }},
     });
-  };
-
-  const handleMove = async (id: string, direction: "up" | "down") => {
-    const index = employees.findIndex((e) => e.id === id);
-    if ((direction === "up" && index === 0) || (direction === "down" && index === employees.length - 1)) return;
-    const newEmployees = [...employees];
-    const swapIndex = direction === "up" ? index - 1 : index + 1;
-    [newEmployees[index], newEmployees[swapIndex]] = [newEmployees[swapIndex], newEmployees[index]];
-    setEmployees(newEmployees);
-    await fetch("/api/employees/reorder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderedIds: newEmployees.map((e) => e.id) }) });
   };
 
   const formatFixedDays = (days: string[]) => {
@@ -77,7 +72,6 @@ export default function EmployeesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  {isAdmin && <TableHead className="w-12"></TableHead>}
                   <TableHead>Name</TableHead>
                   <TableHead>Designation</TableHead>
                   <TableHead>WFH Type</TableHead>
@@ -87,16 +81,8 @@ export default function EmployeesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {employees.map((emp, idx) => (
+                {employees.map((emp) => (
                   <TableRow key={emp.id} className={`transition-colors duration-200 ${emp.email === userEmail ? "bg-primary/5" : ""}`}>
-                    {isAdmin && (
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMove(emp.id, "up")} disabled={idx === 0}><ArrowUp className="h-3 w-3" /></Button>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMove(emp.id, "down")} disabled={idx === employees.length - 1}><ArrowDown className="h-3 w-3" /></Button>
-                        </div>
-                      </TableCell>
-                    )}
                     <TableCell className="font-medium">{emp.name} {emp.email === userEmail && <Badge variant="outline" className="ml-2 text-xs">You</Badge>}</TableCell>
                     <TableCell>{emp.designation}</TableCell>
                     <TableCell>
@@ -114,10 +100,10 @@ export default function EmployeesPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        {canEdit(emp) && <EmployeeForm onSuccess={fetchEmployees} initialData={emp} mode="inline" isSelfEdit={emp.email === userEmail && !isAdmin} />}
-                        {isAdmin && (
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(emp.id, emp.name)} className="h-8 w-8 text-destructive hover:text-destructive">
-                            <Trash2 className="h-4 w-4" />
+                        {canEdit(emp) && <EmployeeForm onSuccess={fetchEmployees} initialData={emp} mode="inline" isSelfEdit={emp.email === userEmail} />}
+                        {isAdmin && emp.email !== userEmail && (
+                          <Button variant="ghost" size="icon" disabled={deletingId === emp.id} onClick={() => handleDelete(emp.id, emp.name)} className="h-8 w-8 text-destructive hover:text-destructive">
+                            {deletingId === emp.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                           </Button>
                         )}
                       </div>

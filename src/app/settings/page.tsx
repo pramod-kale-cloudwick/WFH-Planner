@@ -47,7 +47,9 @@ export default function SettingsPage() {
   };
 
   const rotatingCount = employees.filter((e) => e.wfhType === "rotating" && e.isActive).length;
-  const calculatedWfh = settings ? Math.max(0, rotatingCount - settings.availableSeats) : 0;
+  const wfoCount = employees.filter((e) => e.wfhType === "permanent_wfo" && e.isActive).length;
+  const rotatingSeats = settings ? Math.max(0, settings.availableSeats - wfoCount) : 0;
+  const calculatedWfh = settings ? Math.max(0, rotatingCount - rotatingSeats) : 0;
 
   if (loading || !settings) return (
     <div className="min-h-screen flex flex-col">
@@ -101,7 +103,7 @@ export default function SettingsPage() {
                   <p className="text-xs text-muted-foreground">WFH Per Week</p>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground text-center">WFH slots auto-calculated: Rotating Employees ({rotatingCount}) - Seats ({settings.availableSeats}) = {calculatedWfh}</p>
+              <p className="text-xs text-muted-foreground text-center">WFH slots auto-calculated: Rotating Employees ({rotatingCount}) - (Seats ({settings.availableSeats}) - Permanent WFO ({wfoCount})) = {calculatedWfh}</p>
             </CardContent>
           </Card>
 
@@ -117,11 +119,12 @@ export default function SettingsPage() {
               <CardTitle>How It Works</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-2">
-              <p><strong>WFH slots</strong> are auto-calculated based on seats vs rotating employees.</p>
-              <p><strong>Rotating employees</strong> cycle through WFH weeks based on their order.</p>
+              <p><strong>WFH slots</strong> = rotating employees minus seats left after permanent WFO employees.</p>
+              <p><strong>Rotating employees</strong> cycle alphabetically; whoever was home least recently goes next. New joiners slot in by name.</p>
               <p><strong>Permanent WFH/WFO</strong> employees are excluded from rotation.</p>
-              <p><strong>Day-fixed</strong> employees have WFH on a specific day each week.</p>
-              <p><strong>Swapping</strong> creates a one-time override without affecting future weeks.</p>
+              <p><strong>Fixed office days</strong> are honoured even on WFH weeks; if seats overflow, an in-office colleague gets that single day as WFH.</p>
+              <p><strong>Auto-adjust</strong> re-plans from the week after next when people join, leave, change type or seats change. Affected people are notified.</p>
+              <p><strong>Swaps and admin edits</strong> lock that week so re-plans keep them.</p>
             </CardContent>
           </Card>
         </div>

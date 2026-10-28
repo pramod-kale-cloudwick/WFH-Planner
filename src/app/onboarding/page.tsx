@@ -27,16 +27,17 @@ export default function OnboardingPage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [name, setName] = useState("");
+  const [typedName, setName] = useState<string | null>(null);
   const [designation, setDesignation] = useState("");
   const [wfhType, setWfhType] = useState<WfhType>("rotating");
   const [fixedDays, setFixedDays] = useState<WeekDay[]>([]);
   const [color, setColor] = useState("");
+  // GitHub name is only a default until the user edits the field
+  const name = typedName ?? session?.user?.name ?? "";
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.isOnboarded) router.replace("/");
-    if (status === "authenticated" && session?.user?.name && !name) setName(session.user.name);
-  }, [status, session, router, name]);
+  }, [status, session, router]);
 
   const toggleDay = (day: WeekDay) => {
     setFixedDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
@@ -44,6 +45,7 @@ export default function OnboardingPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!name.trim() || !designation.trim()) { toast.error("Name and designation are required"); return; }
     setLoading(true);
     try {
       const res = await fetch("/api/employees/onboard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, designation, wfhType, fixedDays, color: color || undefined }) });
@@ -127,7 +129,7 @@ export default function OnboardingPage() {
               {color && <div className="flex items-center gap-2"><span className="w-4 h-4 rounded" style={{ backgroundColor: color }} /><span className="text-xs text-muted-foreground">{color}</span></div>}
             </div>
             <div className="space-y-2">
-              <Label>Fixed WFH Days <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Label>Fixed Office Days <span className="text-muted-foreground text-xs">(optional, in office every week)</span></Label>
               <div className="flex flex-wrap gap-2">
                 {WEEKDAYS.map((day) => (
                   <Badge key={day.value} variant={fixedDays.includes(day.value) ? "default" : "outline"} className="cursor-pointer select-none transition-all duration-200 hover:scale-105 active:scale-95" onClick={() => toggleDay(day.value)}>

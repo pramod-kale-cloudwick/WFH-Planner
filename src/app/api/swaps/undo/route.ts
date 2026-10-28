@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { swapHistory, allocationEmployees } from "@/lib/schema";
 import { eq, and } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth-utils";
+import { recomputeBumps } from "@/lib/allocation-engine";
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
 
     // Delete the original swap record
     await db.delete(swapHistory).where(eq(swapHistory.id, swapId));
+    await recomputeBumps(reverseSwap.length ? [alloc1, reverseSwap[0].allocationId] : [alloc1]);
 
     return NextResponse.json({ success: true });
   } catch (e) {

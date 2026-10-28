@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { employees } from "@/lib/schema";
 import { eq, max } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { rebalanceSchedule } from "@/lib/allocation-engine";
 
 const ALL_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4", "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16"];
 
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
       color: assignedColor,
     }).returning();
 
+    await rebalanceSchedule(`${newEmployee[0].name} joined`).catch(console.error);
     return NextResponse.json({ ...newEmployee[0], fixedDays: JSON.parse(newEmployee[0].fixedDays || "[]"), isFirstUser }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed to complete onboarding" }, { status: 500 });
