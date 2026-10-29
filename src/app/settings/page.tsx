@@ -121,7 +121,7 @@ export default function SettingsPage() {
             <CardContent className="text-sm text-muted-foreground space-y-2">
               <p><strong>WFH slots</strong> = rotating employees minus seats left after permanent WFO employees.</p>
               <p><strong>Rotating employees</strong> cycle alphabetically; whoever was home least recently goes next. New joiners slot in by name.</p>
-              <p><strong>Permanent WFH/WFO</strong> employees are excluded from rotation.</p>
+              <p><strong>Permanent WFH/WFO</strong> employees are excluded from rotation. Permanent WFH people can have fixed office days; permanent WFO people can have fixed WFH days, which frees their seat that day.</p>
               <p><strong>Fixed office days</strong> are honoured even on WFH weeks; if seats overflow, an in-office colleague gets that single day as WFH.</p>
               <p><strong>Auto-adjust</strong> re-plans from the week after next when people join, leave, change type or seats change. Affected people are notified.</p>
               <p><strong>Swaps and admin edits</strong> lock that week so re-plans keep them.</p>

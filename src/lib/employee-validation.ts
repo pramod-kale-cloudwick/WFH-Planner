@@ -9,8 +9,8 @@ export type FieldErrors = Partial<Record<Field, string>>;
 export type EmployeeInput = { name?: unknown; email?: unknown; designation?: unknown; wfhType?: unknown; fixedDays?: unknown; color?: unknown };
 export type EmployeeData = { name?: string; email?: string | null; designation?: string; wfhType?: WfhType; fixedDays?: WeekDay[]; color?: string | null };
 
-/** Permanent WFO is in office every day, so fixed office days are meaningless for them. */
-export const allowsFixedDays = (type: WfhType) => type !== "permanent_wfo";
+/** `fixedDays` means fixed WFH days for permanent WFO, and fixed office days for everyone else. */
+export const fixedDayKind = (type: WfhType): "wfh" | "office" => (type === "permanent_wfo" ? "wfh" : "office");
 
 const NAME_RE = /^\p{L}[\p{L}\s.'-]*$/u, EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/, HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const clean = (v: unknown) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ") : "");
@@ -47,15 +47,14 @@ export function validateEmployee(input: EmployeeInput, { partial = false, curren
     else data.wfhType = type;
   }
 
-  const type = data.wfhType ?? currentType ?? "rotating";
-  if (!allowsFixedDays(type)) data.fixedDays = [];
-  else if (has("fixedDays")) {
+  const type = data.wfhType ?? currentType ?? "rotating", kind = fixedDayKind(type);
+  if (has("fixedDays")) {
     const raw = Array.isArray(input.fixedDays) ? input.fixedDays : [];
     const days = WEEKDAY_LIST.filter((d) => raw.includes(d));
     if (raw.some((d) => !WEEKDAY_LIST.includes(d as WeekDay))) errors.fixedDays = "Pick weekdays only";
-    else if (days.length === WEEKDAY_LIST.length) errors.fixedDays = "In office all 5 days? Choose Permanent WFO instead";
+    else if (days.length === WEEKDAY_LIST.length) errors.fixedDays = kind === "wfh" ? "Home all 5 days? Choose Permanent WFH instead" : "In office all 5 days? Choose Permanent WFO instead";
     data.fixedDays = days;
-  }
+  } else if (currentType && fixedDayKind(currentType) !== kind) data.fixedDays = [];
 
   if (input.color !== undefined) {
     const color = clean(input.color);

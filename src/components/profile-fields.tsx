@@ -5,16 +5,21 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, X } from "lucide-react";
-import { allowsFixedDays, WEEKDAY_LIST, type FieldErrors } from "@/lib/employee-validation";
+import { X } from "lucide-react";
+import { fixedDayKind, WEEKDAY_LIST, type FieldErrors } from "@/lib/employee-validation";
 import type { WfhType, WeekDay } from "@/types";
 
 const PRESET_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4", "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16"];
 const TYPE_LABELS: Record<WfhType, { label: string; hint: string }> = {
   rotating: { label: "Rotating", hint: "Full week WFH on your rotation turn" },
-  permanent_wfh: { label: "Permanent WFH", hint: "Always works from home" },
-  permanent_wfo: { label: "Permanent WFO", hint: "Always works from office" },
+  permanent_wfh: { label: "Permanent WFH", hint: "Works from home, except on fixed office days (if picked below)" },
+  permanent_wfo: { label: "Permanent WFO", hint: "Works from office, except on fixed WFH days (if picked below)" },
 };
+
+const DAY_COPY = {
+  office: { label: "Fixed Office Days", sub: "optional, in office every week, even on WFH weeks", limit: "Every day in office means Permanent WFO." },
+  wfh: { label: "Fixed WFH Days", sub: "optional, home on these days every week", limit: "Every day at home means Permanent WFH." },
+} as const;
 
 export type Preferences = { wfhType: WfhType; fixedDays: WeekDay[]; color: string };
 
@@ -24,8 +29,10 @@ export function FieldError({ id, message }: { id?: string; message?: string }) {
 
 /** WFH type, badge colour and fixed office days, with type-aware rules shared by onboarding and the employee form. */
 export function PreferenceFields({ value, onChange, errors, typeNotice }: { value: Preferences; onChange: (patch: Partial<Preferences>) => void; errors: FieldErrors; typeNotice?: ReactNode }) {
-  const { wfhType, fixedDays, color } = value, canPickDays = allowsFixedDays(wfhType), atLimit = fixedDays.length >= WEEKDAY_LIST.length - 1;
-  const setType = (type: WfhType) => onChange({ wfhType: type, ...(!allowsFixedDays(type) && { fixedDays: [] }) });
+  const { wfhType, fixedDays, color } = value, kind = fixedDayKind(wfhType), atLimit = fixedDays.length >= WEEKDAY_LIST.length - 1;
+  const copy = DAY_COPY[kind];
+  // Fixed days flip meaning between office and WFH, so switching across kinds clears them
+  const setType = (type: WfhType) => onChange({ wfhType: type, ...(fixedDayKind(type) !== kind && { fixedDays: [] }) });
   const toggleDay = (day: WeekDay) => onChange({ fixedDays: fixedDays.includes(day) ? fixedDays.filter((d) => d !== day) : WEEKDAY_LIST.filter((d) => d === day || fixedDays.includes(d)) });
 
   return (
@@ -57,24 +64,18 @@ export function PreferenceFields({ value, onChange, errors, typeNotice }: { valu
         <FieldError message={errors.color} />
       </div>
       <div className="space-y-2">
-        <Label>Fixed Office Days <span className="text-muted-foreground text-xs">(optional, in office every week, even on WFH weeks)</span></Label>
-        {canPickDays ? (
-          <>
-            <div className="flex flex-wrap gap-2">
-              {WEEKDAY_LIST.map((day) => {
-                const selected = fixedDays.includes(day), locked = !selected && atLimit;
-                return (
-                  <Badge key={day} variant={selected ? "default" : "outline"} aria-disabled={locked} title={locked ? "In office all 5 days? Choose Permanent WFO instead" : undefined} className={`select-none capitalize transition-all duration-200 ${locked ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:scale-105 active:scale-95"}`} onClick={() => !locked && toggleDay(day)}>
-                    {day}{selected && <X className="h-3 w-3 ml-1" />}
-                  </Badge>
-                );
-              })}
-            </div>
-            <p className="text-xs text-muted-foreground">{atLimit ? "Max 4 days. Every day in office means Permanent WFO." : "Pick up to 4 days."}</p>
-          </>
-        ) : (
-          <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground"><Building2 className="h-4 w-4 shrink-0" />Not needed. Permanent WFO is in office every day.</div>
-        )}
+        <Label>{copy.label} <span className="text-muted-foreground text-xs">({copy.sub})</span></Label>
+        <div className="flex flex-wrap gap-2">
+          {WEEKDAY_LIST.map((day) => {
+            const selected = fixedDays.includes(day), locked = !selected && atLimit;
+            return (
+              <Badge key={day} variant={selected ? "default" : "outline"} aria-disabled={locked} title={locked ? copy.limit : undefined} className={`select-none capitalize transition-all duration-200 ${locked ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:scale-105 active:scale-95"}`} onClick={() => !locked && toggleDay(day)}>
+                {day}{selected && <X className="h-3 w-3 ml-1" />}
+              </Badge>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">{atLimit ? `Max 4 days. ${copy.limit}` : "Pick up to 4 days."}</p>
         <FieldError message={errors.fixedDays} />
       </div>
     </>

@@ -27,7 +27,7 @@ const STEPS: DriveStep[] = [
     },
   },
   { element: at("legend"), popover: { title: "Rotating team", description: "Everyone in the WFH rotation and their calendar colour. The rotation goes alphabetically, week after week." } },
-  { element: at("fixed-days"), popover: { title: "Fixed office days", description: "These people come to office on these days every week, even during their WFH week." } },
+  { element: at("fixed-days"), popover: { title: "Fixed days", description: "<b>Fixed office days</b>: in office on these days every week, even during a WFH week.<br/><b>Fixed WFH days</b>: permanent-office people who stay home on these days." } },
   { element: at("profile"), popover: { title: "Profile menu", description: "Retake this tour anytime from here with <b>Take a tour</b>, or sign out." } },
 ];
 

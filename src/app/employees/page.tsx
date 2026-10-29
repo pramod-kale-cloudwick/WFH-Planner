@@ -90,7 +90,9 @@ export default function EmployeesPage() {
                     </TableCell>
                     <TableCell>
                       {formatFixedDays(emp.fixedDays) ? (
-                        <Badge variant="outline" className="bg-purple-500/20 text-purple-400">{formatFixedDays(emp.fixedDays)}</Badge>
+                        emp.wfhType === "permanent_wfo"
+                          ? <Badge variant="outline" className="bg-green-500/20 text-green-400" title="Fixed WFH days">WFH: {formatFixedDays(emp.fixedDays)}</Badge>
+                          : <Badge variant="outline" className="bg-purple-500/20 text-purple-400" title="Fixed office days">{formatFixedDays(emp.fixedDays)}</Badge>
                       ) : (
                         <span className="text-muted-foreground text-sm">-</span>
                       )}

@@ -11,8 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays, MessageCircle, X, Send, ArrowRightLeft, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays, MessageCircle, X, Send, ArrowRightLeft, Loader2, House } from "lucide-react";
 import { cn, workWeek } from "@/lib/utils";
+import { fixedDayKind, WEEKDAY_LIST } from "@/lib/employee-validation";
 import { useEmployees, useAllocations, useAnnotations } from "@/lib/hooks";
 import type { WeekAllocation, Employee, WeekDay, DateAnnotation, DayBump } from "@/types";
 
@@ -109,13 +110,17 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
     return eachDayOfInterval({ start: calStart, end: calEnd });
   }, [currentDate]);
 
-  // WFH-week employees with a fixed office day are in office that day; bumped employees take their WFH slot
+  const permanentWfh = useMemo(() => employees.filter((e) => e.isActive && e.wfhType === "permanent_wfh"), [employees]);
+  const permanentWfo = useMemo(() => employees.filter((e) => e.isActive && e.wfhType === "permanent_wfo" && e.fixedDays?.length), [employees]);
+
+  // Fixed days: office days for WFH-week / permanent-WFH people, WFH days for permanent-WFO people; bumped employees take a WFH slot
   const getWfhForDay = useCallback((day: Date): { wfh: Employee[]; bumped: DayBump[] } => {
     const allocation = allocations.find((a) => isSameWeek(day, a.weekStart, { weekStartsOn: 0 }));
     if (!allocation) return { wfh: [], bumped: [] };
     const weekDay = format(day, "EEEE").toLowerCase() as WeekDay, dateStr = format(day, "yyyy-MM-dd");
-    return { wfh: allocation.employees.filter((e) => !e.fixedDays?.includes(weekDay)), bumped: allocation.bumps?.filter((b) => b.date === dateStr) ?? [] };
-  }, [allocations]);
+    const home = [...allocation.employees, ...permanentWfh.filter((p) => !allocation.employees.some((e) => e.id === p.id))].filter((e) => !e.fixedDays?.includes(weekDay));
+    return { wfh: [...home, ...permanentWfo.filter((e) => e.fixedDays.includes(weekDay))], bumped: allocation.bumps?.filter((b) => b.date === dateStr) ?? [] };
+  }, [allocations, permanentWfh, permanentWfo]);
 
   const getAssignable = useCallback((allocation: WeekAllocation | null) => employees.filter((e) => e.isActive && e.wfhType !== "permanent_wfh" && !allocation?.employees.some((a) => a.id === e.id)), [employees]);
 
@@ -358,10 +363,10 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
                           {wfhEmps.map((emp) => {
                             const empColor = employeeColorMap.get(emp.id) || "#6366F1";
                             const isSelf = currentUserEmployee?.id === emp.id;
-                            const canSwap = (isSelf || isAdmin) && !isPastWeek;
+                            const permanent = emp.wfhType !== "rotating", canSwap = (isSelf || isAdmin) && !isPastWeek && !permanent;
                             return (
-                              <Badge key={emp.id} variant="secondary" className={cn("text-[10px] px-1.5 py-0 transition-all duration-150", canSwap && "cursor-pointer hover:ring-2 hover:ring-primary", isPastWeek && "opacity-50", !canSwap && "cursor-default")} style={{ backgroundColor: `${empColor}33`, color: empColor }} onClick={(e) => { e.stopPropagation(); if (canSwap) handleEmployeeClick(day, emp); }}>
-                                {emp.name}{canSwap && <ArrowRightLeft className="inline h-2.5 w-2.5 ml-1 opacity-60" />}
+                              <Badge key={emp.id} variant="secondary" title={emp.wfhType === "permanent_wfh" ? "Permanent WFH (in office only on fixed days)" : emp.wfhType === "permanent_wfo" ? "Fixed WFH day (Permanent WFO)" : undefined} className={cn("text-[10px] px-1.5 py-0 transition-all duration-150", canSwap && "cursor-pointer hover:ring-2 hover:ring-primary", isPastWeek && "opacity-50", !canSwap && "cursor-default")} style={{ backgroundColor: `${empColor}33`, color: empColor }} onClick={(e) => { e.stopPropagation(); if (canSwap) handleEmployeeClick(day, emp); }}>
+                                {permanent && <House className="inline h-2.5 w-2.5 mr-1 opacity-70" />}{emp.name}{canSwap && <ArrowRightLeft className="inline h-2.5 w-2.5 ml-1 opacity-60" />}
                               </Badge>
                             );
                           })}
@@ -441,20 +446,23 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
       </div>
 
       {employeesWithFixedDays.length > 0 && (
-        <div data-tour="fixed-days" className="border-t pt-4 animate-in fade-in duration-500">
-          <h3 className="text-sm font-medium mb-2 text-muted-foreground">Fixed Office Days (every week)</h3>
-          <div className="flex flex-wrap gap-3">
-            {(["monday", "tuesday", "wednesday", "thursday", "friday"] as WeekDay[]).map((day) => {
-              const emps = getEmployeesByDay(day);
-              if (emps.length === 0) return null;
-              return (
-                <div key={day} className="flex items-center gap-2 bg-card px-3 py-1.5 rounded-md border transition-all duration-200 hover:border-primary/50">
-                  <span className="text-xs font-medium capitalize">{day.slice(0, 3)}:</span>
-                  {emps.map((e) => <span key={e.id} className="text-sm">{e.name}</span>)}
+        <div data-tour="fixed-days" className="border-t pt-4 space-y-3 animate-in fade-in duration-500">
+          {([["office", "Fixed Office Days (every week)"], ["wfh", "Fixed WFH Days (every week, Permanent WFO)"]] as const).map(([kind, title]) => {
+            const groups = WEEKDAY_LIST.map((day) => ({ day, emps: getEmployeesByDay(day).filter((e) => fixedDayKind(e.wfhType) === kind) })).filter((g) => g.emps.length);
+            return groups.length > 0 && (
+              <div key={kind}>
+                <h3 className="text-sm font-medium mb-2 text-muted-foreground">{title}</h3>
+                <div className="flex flex-wrap gap-3">
+                  {groups.map(({ day, emps }) => (
+                    <div key={day} className="flex items-center gap-2 bg-card px-3 py-1.5 rounded-md border transition-all duration-200 hover:border-primary/50">
+                      <span className="text-xs font-medium capitalize">{day.slice(0, 3)}:</span>
+                      {emps.map((e) => <span key={e.id} className="text-sm">{e.name}</span>)}
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

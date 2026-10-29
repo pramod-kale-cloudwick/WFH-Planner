@@ -13,8 +13,8 @@ import { LIMITS, validateEmployee, type FieldErrors } from "@/lib/employee-valid
 import type { WfhType, WeekDay } from "@/types";
 
 const WFH_TYPE_WARNINGS: Record<WfhType, string> = {
-  permanent_wfo: "Always in office. Fixed office days are cleared. Schedule re-plans from the week after next.",
-  permanent_wfh: "Always WFH. Schedule re-plans from the week after next.",
+  permanent_wfo: "In office except fixed WFH days. Previously picked days are cleared. Schedule re-plans from the week after next.",
+  permanent_wfh: "WFH except fixed office days. Schedule re-plans from the week after next.",
   rotating: "Joins the rotation in alphabetical order. Schedule re-plans from the week after next.",
 };
 
