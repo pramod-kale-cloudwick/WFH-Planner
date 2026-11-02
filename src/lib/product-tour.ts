@@ -18,7 +18,7 @@ const STEPS: DriveStep[] = [
   { element: at("nav-swaps"), popover: { title: "Swap Requests", description: "Requests to trade WFH weeks. The yellow badge counts requests waiting on you." } },
   { element: at("bell"), popover: { title: "Notifications", description: "Schedule changes that affect you (re-plans, swaps, admin edits) plus new calendar notes." } },
   { element: at("month-nav"), popover: { title: "Month navigation", description: "Jump between months. <b>Today</b> brings you back to the current month." } },
-  { element: at("generate"), popover: { title: "Generate Schedule (admin)", description: "Builds the alphabetical rotation for the next 20 weeks. The current and next week stay frozen; swapped or edited weeks are kept." } },
+  { element: at("generate"), popover: { title: "Generate Schedule (admin)", description: "Builds the alphabetical rotation for the next 20 weeks. The current and next week stay frozen; swapped or edited weeks are kept. Run it after new people join; you'll get a notification." } },
   {
     element: at(TOUR_ANCHOR),
     popover: {
@@ -27,6 +27,7 @@ const STEPS: DriveStep[] = [
         "A name on a day = working from home that day.",
         "No name = in office that day.",
         "Hover any name to see why they're home.",
+        "Switch to <b>who's in office</b> from the profile menu; it also shows seats used per day.",
         "Click your rotation-week name to swap that week.",
         "Click any day to add notes. Admins can also assign WFH there.",
       ]),

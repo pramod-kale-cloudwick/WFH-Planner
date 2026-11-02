@@ -2,6 +2,7 @@ import type { WfhType, WeekDay } from "@/types";
 
 export const WEEKDAY_LIST: WeekDay[] = ["monday", "tuesday", "wednesday", "thursday", "friday"];
 export const WFH_TYPES: WfhType[] = ["rotating", "permanent_wfh", "permanent_wfo"];
+export const WFH_TYPE_LABELS: Record<WfhType, string> = { rotating: "Rotating", permanent_wfh: "Permanent WFH", permanent_wfo: "Permanent WFO" };
 export const LIMITS = { name: 50, designation: 60, email: 254 } as const;
 
 type Field = "name" | "email" | "designation" | "wfhType" | "fixedDays" | "color";

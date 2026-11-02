@@ -1,7 +1,23 @@
+import { useSyncExternalStore } from "react";
 import useSWR from "swr";
 import type { Employee, WeekAllocation, DateAnnotation, SwapRequest } from "@/types";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+export type CalendarMode = "wfh" | "office";
+const MODE_KEY = "calendar-mode", MODE_EVENT = "calendar-mode-change";
+const subscribeMode = (cb: () => void) => {
+  window.addEventListener(MODE_EVENT, cb); window.addEventListener("storage", cb);
+  return () => { window.removeEventListener(MODE_EVENT, cb); window.removeEventListener("storage", cb); };
+};
+const readMode = (): CalendarMode => (localStorage.getItem(MODE_KEY) === "office" ? "office" : "wfh");
+
+/** Calendar shows who's WFH (default) or who's in office; persisted per browser and shared across components. */
+export function useCalendarMode() {
+  const mode = useSyncExternalStore(subscribeMode, readMode, (): CalendarMode => "wfh");
+  const setMode = (next: CalendarMode) => { localStorage.setItem(MODE_KEY, next); window.dispatchEvent(new Event(MODE_EVENT)); };
+  return [mode, setMode] as const;
+}
 
 export function useEmployees() {
   const { data, error, isLoading, mutate } = useSWR<Employee[]>("/api/employees", fetcher, { revalidateOnFocus: false, dedupingInterval: 30000 });
@@ -19,7 +35,7 @@ export function useAnnotations(startDate: string, endDate: string) {
 }
 
 export function useSettings() {
-  const { data, error, isLoading, mutate } = useSWR<{ availableSeats: number; cycleLength: number }>("/api/settings", fetcher, { revalidateOnFocus: false, dedupingInterval: 60000 });
+  const { data, error, isLoading, mutate } = useSWR<{ availableSeats: number; weekCycleLength: number }>("/api/settings", fetcher, { revalidateOnFocus: false, dedupingInterval: 60000 });
   return { settings: data, error, isLoading, mutate };
 }
 

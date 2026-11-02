@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { employees } from "@/lib/schema";
+import { employees, notifications } from "@/lib/schema";
 import { eq, max } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { rebalanceSchedule } from "@/lib/allocation-engine";
-import { firstError, validateEmployee } from "@/lib/employee-validation";
+import { firstError, validateEmployee, WFH_TYPE_LABELS } from "@/lib/employee-validation";
 
 const ALL_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4", "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16"];
 
@@ -27,8 +26,8 @@ export async function POST(request: NextRequest) {
     if (!valid) return NextResponse.json({ error: firstError(errors), errors }, { status: 400 });
     const { name, designation, wfhType, fixedDays, color } = data as Required<typeof data>;
 
-    const existingAdmin = await db.select().from(employees).where(eq(employees.isAdmin, true)).limit(1);
-    const isFirstUser = existingAdmin.length === 0;
+    const allAdmins = await db.select({ id: employees.id, isActive: employees.isActive }).from(employees).where(eq(employees.isAdmin, true));
+    const isFirstUser = allAdmins.length === 0, admins = allAdmins.filter((a) => a.isActive);
     const maxOrderResult = await db.select({ maxOrder: max(employees.rotationOrder) }).from(employees);
     const nextOrder = (maxOrderResult[0]?.maxOrder ?? -1) + 1;
 
@@ -50,7 +49,8 @@ export async function POST(request: NextRequest) {
       color: assignedColor,
     }).returning();
 
-    await rebalanceSchedule(`${newEmployee[0].name} joined`).catch(console.error);
+    // Re-planning is left to an admin so back-to-back onboardings don't each reshuffle the schedule
+    if (admins.length) await db.insert(notifications).values(admins.map((a) => ({ id: nanoid(), employeeId: a.id, message: `${name} joined the team (${WFH_TYPE_LABELS[wfhType]}). Click Generate Schedule to include them.` })));
     return NextResponse.json({ ...newEmployee[0], fixedDays: JSON.parse(newEmployee[0].fixedDays || "[]"), isFirstUser }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed to complete onboarding" }, { status: 500 });

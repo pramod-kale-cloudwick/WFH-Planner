@@ -36,6 +36,7 @@ export interface WeekAllocation {
 export interface DayBump {
   date: string;
   employee: Employee;
+  forId?: string;
   forName?: string;
 }
 

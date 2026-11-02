@@ -247,7 +247,7 @@ export async function getAllocationsForMonth(year: number, month: number): Promi
   return allocations.map((alloc) => {
     const allocEmps = links.filter((l) => l.allocationId === alloc.id).flatMap((l) => empById.get(l.employeeId) ?? []);
     const swapDetails = swaps.filter((s) => s.allocationId === alloc.id).flatMap((s) => { const from = empById.get(s.fromEmployeeId), to = empById.get(s.toEmployeeId); return from && to ? [{ fromName: from.name, toName: to.name }] : []; });
-    const dayBumpDetails = bumps.filter((b) => b.allocationId === alloc.id).flatMap((b) => { const emp = empById.get(b.employeeId); return emp ? [{ date: b.date, employee: emp, forName: b.forEmployeeId ? empById.get(b.forEmployeeId)?.name : undefined }] : []; });
+    const dayBumpDetails = bumps.filter((b) => b.allocationId === alloc.id).flatMap((b) => { const emp = empById.get(b.employeeId); return emp ? [{ date: b.date, employee: emp, forId: b.forEmployeeId ?? undefined, forName: b.forEmployeeId ? empById.get(b.forEmployeeId)?.name : undefined }] : []; });
     return { id: alloc.id, weekStart: parseISO(alloc.weekStart), weekEnd: parseISO(alloc.weekEnd), weekNumber: alloc.weekNumber, isOverride: alloc.isOverride, createdAt: alloc.createdAt, employees: allocEmps, swaps: swapDetails, bumps: dayBumpDetails };
   });
 }

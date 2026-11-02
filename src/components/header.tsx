@@ -9,8 +9,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Settings, LogOut, Home, Bell, MessageCircle, History, ArrowRightLeft, CalendarClock, Compass } from "lucide-react";
-import { useSwapRequests, useEmployees } from "@/lib/hooks";
+import { Users, Settings, LogOut, Home, Bell, MessageCircle, History, ArrowRightLeft, CalendarClock, Compass, Building2, House } from "lucide-react";
+import { useSwapRequests, useEmployees, useCalendarMode } from "@/lib/hooks";
 import { startTour } from "@/lib/product-tour";
 import type { DateAnnotation, ScheduleNotification, SwapRequest } from "@/types";
 
@@ -21,6 +21,7 @@ export function Header() {
   const router = useRouter(), pathname = usePathname();
   const { employees } = useEmployees();
   const { requests: swapRequests } = useSwapRequests();
+  const [calendarMode, setCalendarMode] = useCalendarMode();
   const [notifications, setNotifications] = useState<BellItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const initials = session?.user?.name?.split(" ").map((n) => n[0]).join("").toUpperCase() || "U";
@@ -130,6 +131,9 @@ export function Header() {
                 </div>
               </div>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setCalendarMode(calendarMode === "wfh" ? "office" : "wfh")}>
+                {calendarMode === "wfh" ? <><Building2 className="mr-2 h-4 w-4" />Show who&apos;s in office</> : <><House className="mr-2 h-4 w-4" />Show who&apos;s WFH</>}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={handleTour}>
                 <Compass className="mr-2 h-4 w-4" />Take a tour
               </DropdownMenuItem>
