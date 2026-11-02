@@ -81,7 +81,7 @@ export const swapHistory = sqliteTable("swap_history", {
   swappedAt: integer("swapped_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
-// One-day WFH given to an in-office employee so a WFH-week employee can use a fixed office day
+// One-day WFH given to an in-office employee so a permanent-WFH employee can use a fixed office day
 export const dayBumps = sqliteTable("day_bumps", {
   id: text("id").primaryKey(),
   allocationId: text("allocation_id").notNull().references(() => weekAllocations.id, { onDelete: "cascade" }),

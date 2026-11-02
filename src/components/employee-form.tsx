@@ -13,9 +13,9 @@ import { LIMITS, validateEmployee, type FieldErrors } from "@/lib/employee-valid
 import type { WfhType, WeekDay } from "@/types";
 
 const WFH_TYPE_WARNINGS: Record<WfhType, string> = {
-  permanent_wfo: "In office except fixed WFH days. Previously picked days are cleared. Schedule re-plans from the week after next.",
-  permanent_wfh: "WFH except fixed office days. Schedule re-plans from the week after next.",
-  rotating: "Joins the rotation in alphabetical order. Schedule re-plans from the week after next.",
+  permanent_wfo: "In office except fixed WFH days. Schedule re-plans from the week after next.",
+  permanent_wfh: "WFH except fixed office days. Previously picked days are cleared. Schedule re-plans from the week after next.",
+  rotating: "Joins the rotation in alphabetical order, keeping fixed WFH days. Schedule re-plans from the week after next.",
 };
 
 type InitialData = { id: string; name: string; email?: string; designation: string; wfhType: WfhType; fixedDays: WeekDay[]; color?: string };

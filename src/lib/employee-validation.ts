@@ -9,8 +9,8 @@ export type FieldErrors = Partial<Record<Field, string>>;
 export type EmployeeInput = { name?: unknown; email?: unknown; designation?: unknown; wfhType?: unknown; fixedDays?: unknown; color?: unknown };
 export type EmployeeData = { name?: string; email?: string | null; designation?: string; wfhType?: WfhType; fixedDays?: WeekDay[]; color?: string | null };
 
-/** `fixedDays` means fixed WFH days for permanent WFO, and fixed office days for everyone else. */
-export const fixedDayKind = (type: WfhType): "wfh" | "office" => (type === "permanent_wfo" ? "wfh" : "office");
+/** `fixedDays` means fixed office days for permanent WFH, and fixed WFH days for everyone else. */
+export const fixedDayKind = (type: WfhType): "wfh" | "office" => (type === "permanent_wfh" ? "office" : "wfh");
 
 const NAME_RE = /^\p{L}[\p{L}\s.'-]*$/u, EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/, HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const clean = (v: unknown) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ") : "");

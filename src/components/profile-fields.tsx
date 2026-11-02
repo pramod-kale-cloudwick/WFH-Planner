@@ -11,13 +11,13 @@ import type { WfhType, WeekDay } from "@/types";
 
 const PRESET_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4", "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16"];
 const TYPE_LABELS: Record<WfhType, { label: string; hint: string }> = {
-  rotating: { label: "Rotating", hint: "Full week WFH on your rotation turn" },
+  rotating: { label: "Rotating", hint: "Full week WFH on your rotation turn, plus fixed WFH days (if picked below) on office weeks" },
   permanent_wfh: { label: "Permanent WFH", hint: "Works from home, except on fixed office days (if picked below)" },
   permanent_wfo: { label: "Permanent WFO", hint: "Works from office, except on fixed WFH days (if picked below)" },
 };
 
 const DAY_COPY = {
-  office: { label: "Fixed Office Days", sub: "optional, in office every week, even on WFH weeks", limit: "Every day in office means Permanent WFO." },
+  office: { label: "Fixed Office Days", sub: "optional, in office on these days every week", limit: "Every day in office means Permanent WFO." },
   wfh: { label: "Fixed WFH Days", sub: "optional, home on these days every week", limit: "Every day at home means Permanent WFH." },
 } as const;
 
@@ -27,7 +27,7 @@ export function FieldError({ id, message }: { id?: string; message?: string }) {
   return message ? <p id={id} role="alert" className="text-xs text-destructive">{message}</p> : null;
 }
 
-/** WFH type, badge colour and fixed office days, with type-aware rules shared by onboarding and the employee form. */
+/** WFH type, badge colour and fixed days, with type-aware rules shared by onboarding and the employee form. */
 export function PreferenceFields({ value, onChange, errors, typeNotice }: { value: Preferences; onChange: (patch: Partial<Preferences>) => void; errors: FieldErrors; typeNotice?: ReactNode }) {
   const { wfhType, fixedDays, color } = value, kind = fixedDayKind(wfhType), atLimit = fixedDays.length >= WEEKDAY_LIST.length - 1;
   const copy = DAY_COPY[kind];

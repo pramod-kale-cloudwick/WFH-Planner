@@ -50,20 +50,20 @@ async function loadContext(): Promise<Ctx> {
 const officeHeadcount = (ctx: Ctx, wfh: Set<string>) => [...ctx.rotating, ...ctx.wfo].filter((e) => !wfh.has(e.id)).length;
 
 /**
- * WFH-week and permanent-WFH employees still come in on their fixed office days; permanent-WFO employees stay home on theirs. When that overflows seats, the in-office
- * employees with the fewest past bumps (alphabetical tie-break) get that single day as WFH instead.
+ * Permanent-WFH employees come in on their fixed office days; office-going rotating and permanent-WFO employees stay home on their fixed WFH days.
+ * When that overflows seats, the in-office rotating employees with the fewest past bumps (alphabetical tie-break) get that single day as WFH instead.
  * Only resolves fixed-day overflow; an admin-forced overflow is left as is.
  */
 function planBumps(ctx: Ctx, allocationId: string, weekStart: string, wfhIds: string[]) {
   const wfh = new Set(wfhIds);
-  const inOffice = ctx.rotating.filter((e) => !wfh.has(e.id));
+  const inOffice = ctx.rotating.filter((e) => !wfh.has(e.id)), officeGoers = [...inOffice, ...ctx.wfo.filter((e) => !wfh.has(e.id))];
   const base = officeHeadcount(ctx, wfh);
   const rows: (typeof dayBumps.$inferInsert)[] = [];
   WEEKDAYS.forEach((day, i) => {
     const hasFixed = (e: Emp) => ctx.fixed.get(e.id)?.includes(day) ?? false;
-    const comers = ctx.rotating.filter((e) => wfh.has(e.id)).concat(ctx.permWfh).filter(hasFixed);
-    // Permanent-WFO fixed days are WFH days, so their seat is free that day
-    const overflow = Math.min(comers.length, base - ctx.wfo.filter(hasFixed).length + comers.length - ctx.seats);
+    const comers = ctx.permWfh.filter(hasFixed);
+    // Office-goers on a fixed WFH day free their seat
+    const overflow = Math.min(comers.length, base - officeGoers.filter(hasFixed).length + comers.length - ctx.seats);
     if (overflow <= 0) return;
     const date = toDay(addDays(parseISO(weekStart), i + 1));
     const byFewestBumps = (a: Emp, b: Emp) => (ctx.bumpCount.get(a.id) ?? 0) - (ctx.bumpCount.get(b.id) ?? 0) || (ctx.rank.get(a.id) ?? 0) - (ctx.rank.get(b.id) ?? 0);

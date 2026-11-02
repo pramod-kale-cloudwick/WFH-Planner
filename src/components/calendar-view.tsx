@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { useSession } from "next-auth/react";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isWeekend, isBefore, isSameWeek } from "date-fns";
 import { toast } from "sonner";
@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays, MessageCircle, X, Send, ArrowRightLeft, Loader2, House } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays, MessageCircle, X, Send, Loader2, House, Repeat, Pin, Building2 } from "lucide-react";
 import { cn, workWeek } from "@/lib/utils";
 import { fixedDayKind, WEEKDAY_LIST } from "@/lib/employee-validation";
 import { useEmployees, useAllocations, useAnnotations } from "@/lib/hooks";
@@ -37,6 +38,18 @@ const LOADING_MESSAGES = [
   "Take a deep breath. You've handled worse Mondays than this loading screen.",
   "You're crushing it this week. Just like we're crushing these free CPU limits.",
 ];
+
+const BADGE_KINDS = {
+  week: { Icon: Repeat, short: "Rotation WFH week", hint: "Rotating · WFH week (home all week)" },
+  fixed: { Icon: Pin, short: "Rotating · fixed WFH day", hint: "Rotating · fixed WFH day on an office week" },
+  wfh: { Icon: House, short: "Permanent WFH", hint: "Permanent WFH · in office only on fixed office days" },
+  wfo: { Icon: Building2, short: "Permanent WFO · fixed WFH day", hint: "Permanent WFO · fixed WFH day" },
+} as const;
+const badgeKind = (emp: Employee, inWeek: boolean): keyof typeof BADGE_KINDS => (inWeek ? "week" : emp.wfhType === "permanent_wfh" ? "wfh" : emp.wfhType === "permanent_wfo" ? "wfo" : "fixed");
+
+function Hint({ text, children }: { text: string; children: ReactNode }) {
+  return <Tooltip><TooltipTrigger render={<span className="inline-flex" />}>{children}</TooltipTrigger><TooltipContent>{text}</TooltipContent></Tooltip>;
+}
 
 interface CalendarViewProps {
   onSwapComplete?: () => void;
@@ -110,17 +123,16 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
     return eachDayOfInterval({ start: calStart, end: calEnd });
   }, [currentDate]);
 
-  const permanentWfh = useMemo(() => employees.filter((e) => e.isActive && e.wfhType === "permanent_wfh"), [employees]);
-  const permanentWfo = useMemo(() => employees.filter((e) => e.isActive && e.wfhType === "permanent_wfo" && e.fixedDays?.length), [employees]);
+  const activeEmployees = useMemo(() => employees.filter((e) => e.isActive), [employees]);
 
-  // Fixed days: office days for WFH-week / permanent-WFH people, WFH days for permanent-WFO people; bumped employees take a WFH slot
+  // WFH-week people are home all week; permanent WFH is home except fixed office days; everyone else is home on fixed WFH days; bumped employees take a WFH slot
   const getWfhForDay = useCallback((day: Date): { wfh: Employee[]; bumped: DayBump[] } => {
     const allocation = allocations.find((a) => isSameWeek(day, a.weekStart, { weekStartsOn: 0 }));
     if (!allocation) return { wfh: [], bumped: [] };
-    const weekDay = format(day, "EEEE").toLowerCase() as WeekDay, dateStr = format(day, "yyyy-MM-dd");
-    const home = [...allocation.employees, ...permanentWfh.filter((p) => !allocation.employees.some((e) => e.id === p.id))].filter((e) => !e.fixedDays?.includes(weekDay));
-    return { wfh: [...home, ...permanentWfo.filter((e) => e.fixedDays.includes(weekDay))], bumped: allocation.bumps?.filter((b) => b.date === dateStr) ?? [] };
-  }, [allocations, permanentWfh, permanentWfo]);
+    const weekDay = format(day, "EEEE").toLowerCase() as WeekDay, dateStr = format(day, "yyyy-MM-dd"), inWeek = new Set(allocation.employees.map((e) => e.id));
+    const fixedHome = activeEmployees.filter((e) => !inWeek.has(e.id) && (fixedDayKind(e.wfhType) === "office") !== !!e.fixedDays?.includes(weekDay));
+    return { wfh: [...allocation.employees, ...fixedHome], bumped: allocation.bumps?.filter((b) => b.date === dateStr) ?? [] };
+  }, [allocations, activeEmployees]);
 
   const getAssignable = useCallback((allocation: WeekAllocation | null) => employees.filter((e) => e.isActive && e.wfhType !== "permanent_wfh" && !allocation?.employees.some((a) => a.id === e.id)), [employees]);
 
@@ -330,7 +342,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
           </p>
         </div>
       ) : (
-        <div data-tour="calendar-grid" className="border rounded-lg overflow-hidden">
+        <div data-tour="calendar-grid" className="border border-foreground/15 rounded-lg overflow-hidden">
           <div className="grid grid-cols-7 bg-muted/50">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => (
               <div key={day} className={cn("px-2 py-3 text-center text-xs font-medium uppercase tracking-wide", (i === 0 || i === 6) && "text-muted-foreground/50")}>
@@ -353,7 +365,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
 
               return (
                 <Popover key={day.toISOString()}>
-                  <PopoverTrigger disabled={!isCurrentMonth} className={cn("min-h-24 border-t border-l p-1.5 transition-all duration-200 relative cursor-pointer text-left", !isCurrentMonth && "bg-muted/30 cursor-default", weekend && "bg-muted/20", isToday && "ring-2 ring-primary ring-inset", isCurrentMonth && !weekend && "hover:bg-muted/40 hover:shadow-inner", isCurrentMonth && weekend && "hover:bg-muted/30")}>
+                  <PopoverTrigger disabled={!isCurrentMonth} className={cn("min-h-24 border-t border-l border-foreground/15 p-1.5 transition-all duration-200 relative cursor-pointer text-left", !isCurrentMonth && "bg-muted/30 cursor-default", weekend && "bg-muted/20", isToday && "ring-2 ring-primary ring-inset", isCurrentMonth && !weekend && "hover:bg-muted/40 hover:shadow-inner", isCurrentMonth && weekend && "hover:bg-muted/30")}>
                       {hasAnnotations && <MessageCircle className="absolute top-1 right-1 h-3.5 w-3.5 text-yellow-400" fill="currentColor" />}
                       <div className={cn("text-sm font-semibold mb-1", !isCurrentMonth && "text-muted-foreground/50", weekend && "text-muted-foreground/40")}>
                         {format(day, "d")}
@@ -363,19 +375,24 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
                           {wfhEmps.map((emp) => {
                             const empColor = employeeColorMap.get(emp.id) || "#6366F1";
                             const isSelf = currentUserEmployee?.id === emp.id;
-                            const permanent = emp.wfhType !== "rotating", canSwap = (isSelf || isAdmin) && !isPastWeek && !permanent;
+                            const inWeek = !!allocation?.employees.some((a) => a.id === emp.id), canSwap = (isSelf || isAdmin) && !isPastWeek && inWeek;
+                            const { Icon, hint } = BADGE_KINDS[badgeKind(emp, inWeek)];
                             return (
-                              <Badge key={emp.id} variant="secondary" title={emp.wfhType === "permanent_wfh" ? "Permanent WFH (in office only on fixed days)" : emp.wfhType === "permanent_wfo" ? "Fixed WFH day (Permanent WFO)" : undefined} className={cn("text-[10px] px-1.5 py-0 transition-all duration-150", canSwap && "cursor-pointer hover:ring-2 hover:ring-primary", isPastWeek && "opacity-50", !canSwap && "cursor-default")} style={{ backgroundColor: `${empColor}33`, color: empColor }} onClick={(e) => { e.stopPropagation(); if (canSwap) handleEmployeeClick(day, emp); }}>
-                                {permanent && <House className="inline h-2.5 w-2.5 mr-1 opacity-70" />}{emp.name}{canSwap && <ArrowRightLeft className="inline h-2.5 w-2.5 ml-1 opacity-60" />}
-                              </Badge>
+                              <Hint key={emp.id} text={canSwap ? `${hint} · click to swap` : hint}>
+                                <Badge variant="secondary" className={cn("text-[10px] px-1.5 py-0 transition-all duration-150", canSwap && "cursor-pointer hover:ring-2 hover:ring-primary", isPastWeek && "opacity-50", !canSwap && "cursor-default")} style={{ backgroundColor: `${empColor}33`, color: empColor }} onClick={(e) => { e.stopPropagation(); if (canSwap) handleEmployeeClick(day, emp); }}>
+                                  <Icon className="inline h-2.5 w-2.5 opacity-70" />{emp.name}
+                                </Badge>
+                              </Hint>
                             );
                           })}
                           {bumped.map((b) => {
                             const empColor = employeeColorMap.get(b.employee.id) || "#6366F1";
                             return (
-                              <Badge key={`bump-${b.employee.id}`} variant="outline" title={`1-day WFH${b.forName ? ` — seat given to ${b.forName} (fixed office day)` : ""}`} className={cn("text-[10px] px-1.5 py-0 border-dashed cursor-default", isPastWeek && "opacity-50")} style={{ borderColor: empColor, color: empColor }} onClick={(e) => e.stopPropagation()}>
-                                {b.employee.name} · 1d
-                              </Badge>
+                              <Hint key={`bump-${b.employee.id}`} text={b.forName ? `Gave up seat today · ${b.forName} comes in on their fixed office day` : "Gave up seat today to free a seat"}>
+                                <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 border-dashed cursor-default", isPastWeek && "opacity-50")} style={{ borderColor: empColor, color: empColor }} onClick={(e) => e.stopPropagation()}>
+                                  {b.employee.name} · 1d
+                                </Badge>
+                              </Hint>
                             );
                           })}
                         </div>
@@ -431,6 +448,11 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
         </div>
       )}
 
+      <div data-tour="icon-key" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        {Object.values(BADGE_KINDS).map(({ Icon, short }) => <span key={short} className="inline-flex items-center gap-1"><Icon className="h-3 w-3" />{short}</span>)}
+        <span className="inline-flex items-center gap-1"><span className="rounded-full border border-dashed border-muted-foreground px-1.5 text-[10px]">Name · 1d</span>Gave up seat for the day</span>
+      </div>
+
       <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-4">
         <div data-tour="legend" className="flex flex-wrap items-center gap-2">
           {rotatingEmployees.map((emp) => {
@@ -447,7 +469,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
 
       {employeesWithFixedDays.length > 0 && (
         <div data-tour="fixed-days" className="border-t pt-4 space-y-3 animate-in fade-in duration-500">
-          {([["office", "Fixed Office Days (every week)"], ["wfh", "Fixed WFH Days (every week, Permanent WFO)"]] as const).map(([kind, title]) => {
+          {([["office", "Fixed Office Days (every week, Permanent WFH)"], ["wfh", "Fixed WFH Days (every week)"]] as const).map(([kind, title]) => {
             const groups = WEEKDAY_LIST.map((day) => ({ day, emps: getEmployeesByDay(day).filter((e) => fixedDayKind(e.wfhType) === kind) })).filter((g) => g.emps.length);
             return groups.length > 0 && (
               <div key={kind}>
