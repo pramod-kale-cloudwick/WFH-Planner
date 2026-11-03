@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import useSWR from "swr";
-import type { Employee, WeekAllocation, DateAnnotation, SwapRequest, AwayPeriod } from "@/types";
+import type { Employee, WeekAllocation, DateAnnotation, SwapRequest, AwayPeriod, Feedback } from "@/types";
 
 // Throwing on non-2xx keeps error payloads out of `data`, so list hooks fall back to []
 const fetcher = async (url: string) => {
@@ -47,6 +47,12 @@ export function useSettings() {
 export function useAway() {
   const { data, error, isLoading, mutate } = useSWR<AwayPeriod[]>("/api/away", fetcher, { revalidateOnFocus: false, dedupingInterval: 30000 });
   return { away: Array.isArray(data) ? data : [], error, isLoading, mutate };
+}
+
+/** Pass `enabled=false` to skip fetching until the feedback dialog opens. */
+export function useFeedback(enabled = true) {
+  const { data, error, isLoading, mutate } = useSWR<Feedback[]>(enabled ? "/api/feedback" : null, fetcher, { revalidateOnFocus: false });
+  return { feedback: data || [], error, isLoading, mutate };
 }
 
 export function useSwapRequests() {

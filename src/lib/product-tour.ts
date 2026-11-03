@@ -34,6 +34,7 @@ const STEPS: DriveStep[] = [
   },
   { element: at("nav-audit"), popover: { title: "Audit", description: "History of every swap. Admins can undo a swap from here." } },
   { element: at("nav-swaps"), popover: { title: "Swap Requests", description: "Requests to trade WFH weeks. The yellow badge counts requests waiting on you." } },
+  { element: at("feedback"), popover: { title: "Feedback", description: list(["Send <b>feedback</b>, request a <b>feature</b> or <b>report a bug</b>.", "Track your submissions here; you get notified when an admin marks one resolved."]) } },
   { element: at("bell"), popover: { title: "Notifications", description: "Schedule changes that affect you (re-plans, swaps, admin edits, away periods) plus new calendar notes." } },
   { element: at("month-nav"), popover: { title: "Month navigation", description: "Jump between months. <b>Today</b> brings you back to the current month." } },
   {

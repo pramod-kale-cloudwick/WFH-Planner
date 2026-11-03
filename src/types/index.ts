@@ -87,6 +87,18 @@ export interface DateAnnotation {
   createdAt: Date;
 }
 
+export type FeedbackType = "feedback" | "feature" | "bug";
+
+export interface Feedback {
+  id: string;
+  employeeId: string;
+  authorName: string | null;
+  type: FeedbackType;
+  message: string;
+  status: "open" | "resolved";
+  createdAt: Date;
+}
+
 export type SwapRequestStatus = "pending_target" | "pending_admin" | "approved" | "rejected";
 
 export interface SwapRequest {

@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { FeedbackDialog } from "@/components/feedback-dialog";
 import { Users, Settings, LogOut, Home, Bell, MessageCircle, History, ArrowRightLeft, CalendarClock, Compass, Building2, House } from "lucide-react";
 import { useSwapRequests, useEmployees, useCalendarMode } from "@/lib/hooks";
 import { startTour } from "@/lib/product-tour";
@@ -75,6 +76,7 @@ export function Header() {
           </nav>
         </div>
         <div className="flex items-center gap-3">
+          <FeedbackDialog isAdmin={isAdmin} />
           <Popover onOpenChange={(open) => open && markAsRead()}>
             <PopoverTrigger data-tour="bell" className="relative p-2 rounded-full hover:bg-muted transition-colors">
               <Bell className="h-5 w-5 text-muted-foreground" />

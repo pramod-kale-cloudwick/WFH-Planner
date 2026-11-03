@@ -107,6 +107,15 @@ export const notifications = sqliteTable("notifications", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 }, (t) => [index("notifications_employee_idx").on(t.employeeId, t.createdAt)]);
 
+export const feedback = sqliteTable("feedback", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  type: text("type", { enum: ["feedback", "feature", "bug"] }).notNull(),
+  message: text("message").notNull(),
+  status: text("status", { enum: ["open", "resolved"] }).notNull().default("open"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+}, (t) => [index("feedback_employee_idx").on(t.employeeId, t.createdAt)]);
+
 export const dateAnnotations = sqliteTable("date_annotations", {
   id: text("id").primaryKey(),
   date: text("date").notNull(),
