@@ -90,6 +90,16 @@ export const dayBumps = sqliteTable("day_bumps", {
   forEmployeeId: text("for_employee_id").references(() => employees.id, { onDelete: "set null" }),
 });
 
+// Leave/away span in whole weeks (Sunday keys, inclusive); rotation is kept, WFH turns inside lapse and the freed seat pulls one WFH person back to office
+export const employeeAway = sqliteTable("employee_away", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  fromWeek: text("from_week").notNull(),
+  toWeek: text("to_week").notNull(),
+  reason: text("reason"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+}, (t) => [index("employee_away_employee_idx").on(t.employeeId)]);
+
 export const notifications = sqliteTable("notifications", {
   id: text("id").primaryKey(),
   employeeId: text("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),

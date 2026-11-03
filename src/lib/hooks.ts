@@ -1,8 +1,13 @@
 import { useSyncExternalStore } from "react";
 import useSWR from "swr";
-import type { Employee, WeekAllocation, DateAnnotation, SwapRequest } from "@/types";
+import type { Employee, WeekAllocation, DateAnnotation, SwapRequest, AwayPeriod } from "@/types";
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+// Throwing on non-2xx keeps error payloads out of `data`, so list hooks fall back to []
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) throw Object.assign(new Error(`Request failed: ${url}`), { status: res.status });
+  return res.json();
+};
 
 export type CalendarMode = "wfh" | "office";
 const MODE_KEY = "calendar-mode", MODE_EVENT = "calendar-mode-change";
@@ -26,7 +31,7 @@ export function useEmployees() {
 
 export function useAllocations(year: number, month: number) {
   const { data, error, isLoading, mutate } = useSWR<WeekAllocation[]>(`/api/allocations?year=${year}&month=${month}`, fetcher, { revalidateOnFocus: false, dedupingInterval: 30000 });
-  return { allocations: data?.map((a) => ({ ...a, weekStart: new Date(a.weekStart), weekEnd: new Date(a.weekEnd) })) || [], error, isLoading, mutate };
+  return { allocations: (Array.isArray(data) ? data : []).map((a) => ({ ...a, weekStart: new Date(a.weekStart), weekEnd: new Date(a.weekEnd) })) || [], error, isLoading, mutate };
 }
 
 export function useAnnotations(startDate: string, endDate: string) {
@@ -37,6 +42,11 @@ export function useAnnotations(startDate: string, endDate: string) {
 export function useSettings() {
   const { data, error, isLoading, mutate } = useSWR<{ availableSeats: number; weekCycleLength: number }>("/api/settings", fetcher, { revalidateOnFocus: false, dedupingInterval: 60000 });
   return { settings: data, error, isLoading, mutate };
+}
+
+export function useAway() {
+  const { data, error, isLoading, mutate } = useSWR<AwayPeriod[]>("/api/away", fetcher, { revalidateOnFocus: false, dedupingInterval: 30000 });
+  return { away: Array.isArray(data) ? data : [], error, isLoading, mutate };
 }
 
 export function useSwapRequests() {

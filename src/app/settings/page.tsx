@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { RefreshCw, Save } from "lucide-react";
 import type { Settings, Employee } from "@/types";
 
@@ -41,9 +42,11 @@ export default function SettingsPage() {
 
   const handleRegenerate = async () => {
     setRegenerating(true);
-    await fetch("/api/allocations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ weeksCount: 20 }) });
-    setRegenerating(false);
-    toast.success("Schedule regenerated");
+    try {
+      const res = await fetch("/api/allocations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ weeksCount: 20, mode: "reset" }) });
+      if (!res.ok) { toast.error((await res.json()).error ?? "Failed to regenerate schedule"); return; }
+      toast.success("Schedule rebuilt from this week");
+    } catch { toast.error("Failed to regenerate schedule"); } finally { setRegenerating(false); }
   };
 
   const rotatingCount = employees.filter((e) => e.wfhType === "rotating" && e.isActive).length;
@@ -110,7 +113,21 @@ export default function SettingsPage() {
           {isAdmin && (
             <div className="flex gap-4">
               <Button onClick={handleSave} disabled={saving}><Save className="h-4 w-4 mr-2" />{saving ? "Saving..." : "Save Settings"}</Button>
-              <Button variant="outline" onClick={handleRegenerate} disabled={regenerating}><RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? "animate-spin" : ""}`} />{regenerating ? "Regenerating..." : "Regenerate Schedule"}</Button>
+              <AlertDialog>
+                <AlertDialogTrigger disabled={regenerating} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium border bg-background shadow-xs hover:bg-accent h-9 px-4 py-2 transition-all duration-200 disabled:pointer-events-none disabled:opacity-50">
+                  <RefreshCw className={`h-4 w-4 ${regenerating ? "animate-spin" : ""}`} />{regenerating ? "Regenerating..." : "Regenerate Schedule"}
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Discard and rebuild from this week?</AlertDialogTitle>
+                    <AlertDialogDescription>Every week from the current week onward is thrown away, including swaps, admin edits and pending swap requests, then rebuilt fresh. This week can change mid-week; past weeks stay as is. Affected people are notified.</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleRegenerate}>Discard & rebuild</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           )}
 
@@ -126,6 +143,7 @@ export default function SettingsPage() {
               <p><strong>Fixed office days</strong> of permanent WFH people are honoured; if seats overflow, an in-office colleague gets that single day as WFH.</p>
               <p><strong>Auto-adjust</strong> re-plans from the week after next when people join, leave, change type or seats change. Affected people are notified.</p>
               <p><strong>Swaps and admin edits</strong> lock that week so re-plans keep them.</p>
+              <p><strong>Generate Schedule</strong> (dashboard) extends the plan: starts next week on a fresh setup, else from the week after next, keeping locked weeks. <strong>Regenerate Schedule</strong> (here) discards everything from the current week on and rebuilds.</p>
             </CardContent>
           </Card>
         </div>

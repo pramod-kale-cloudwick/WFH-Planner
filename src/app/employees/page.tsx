@@ -5,6 +5,8 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Header } from "@/components/header";
 import { EmployeeForm } from "@/components/employee-form";
+import { AwayDialog, awaySpan } from "@/components/away-dialog";
+import { useAway } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -21,6 +23,7 @@ export default function EmployeesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const isAdmin = session?.user?.isAdmin ?? false;
   const userEmail = session?.user?.email;
+  const { away, mutate: mutateAway } = useAway();
 
   const fetchEmployees = useCallback(async () => {
     const res = await fetch("/api/employees");
@@ -81,7 +84,7 @@ export default function EmployeesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {employees.map((emp) => (
+                {employees.map((emp) => { const periods = away.filter((p) => p.employeeId === emp.id); return (
                   <TableRow key={emp.id} className={`transition-colors duration-200 ${emp.email === userEmail ? "bg-primary/5" : ""}`}>
                     <TableCell className="font-medium">{emp.name} {emp.email === userEmail && <Badge variant="outline" className="ml-2 text-xs">You</Badge>}</TableCell>
                     <TableCell>{emp.designation}</TableCell>
@@ -99,10 +102,12 @@ export default function EmployeesPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={emp.isActive ? "default" : "secondary"}>{emp.isActive ? "Active" : "Inactive"}</Badge>
+                      {periods[0] && <Badge variant="outline" className="ml-2 bg-amber-500/20 text-amber-400">Away {awaySpan(periods[0])}</Badge>}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         {canEdit(emp) && <EmployeeForm onSuccess={fetchEmployees} initialData={emp} mode="inline" isSelfEdit={emp.email === userEmail} />}
+                        {isAdmin && emp.isActive && <AwayDialog employee={emp} periods={periods} onChange={() => mutateAway()} />}
                         {isAdmin && emp.email !== userEmail && (
                           <Button variant="ghost" size="icon" disabled={deletingId === emp.id} onClick={() => handleDelete(emp.id, emp.name)} className="h-8 w-8 text-destructive hover:text-destructive">
                             {deletingId === emp.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -111,7 +116,7 @@ export default function EmployeesPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                ); })}
               </TableBody>
             </Table>
           </div>

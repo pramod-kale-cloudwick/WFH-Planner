@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { employees, allocationEmployees, swapHistory, swapRequests, dateAnnotations, dayBumps, notifications } from "@/lib/schema";
+import { employees, allocationEmployees, swapHistory, swapRequests, dateAnnotations, dayBumps, notifications, employeeAway } from "@/lib/schema";
 import { and, eq, ne, or, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { rebalanceSchedule } from "@/lib/allocation-engine";
@@ -70,6 +70,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
       db.delete(dateAnnotations).where(eq(dateAnnotations.authorId, id)),
       db.delete(dayBumps).where(or(eq(dayBumps.employeeId, id), eq(dayBumps.forEmployeeId, id))),
       db.delete(notifications).where(eq(notifications.employeeId, id)),
+      db.delete(employeeAway).where(eq(employeeAway.employeeId, id)),
       db.delete(employees).where(eq(employees.id, id)),
     ]);
     await rebalanceSchedule(`${emp.name} left`).catch(console.error);

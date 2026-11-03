@@ -12,10 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays, MessageCircle, X, Send, Loader2, House, Repeat, Pin, Building2, type LucideIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, CalendarDays, MessageCircle, X, Send, Loader2, House, Repeat, Pin, Building2, Plane, type LucideIcon } from "lucide-react";
 import { cn, workWeek } from "@/lib/utils";
 import { fixedDayKind, WEEKDAY_LIST } from "@/lib/employee-validation";
-import { useEmployees, useAllocations, useAnnotations, useCalendarMode, useSettings } from "@/lib/hooks";
+import { useEmployees, useAllocations, useAnnotations, useCalendarMode, useSettings, useAway } from "@/lib/hooks";
+import { awaySpan } from "@/components/away-dialog";
 import type { WeekAllocation, Employee, WeekDay, DateAnnotation, DayBump, WfhType } from "@/types";
 
 const DEFAULT_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4", "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16"];
@@ -71,6 +72,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
   const [calendarMode] = useCalendarMode();
   const { settings } = useSettings();
   const { allocations, isLoading: allocLoading, mutate: mutateAllocations } = useAllocations(currentDate.getFullYear(), currentDate.getMonth());
+  const { away: awayPeriods } = useAway();
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -98,6 +100,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
   const [adminSelectedEmp, setAdminSelectedEmp] = useState<{ employee: Employee; allocation: WeekAllocation } | null>(null);
   const [assignEmpId, setAssignEmpId] = useState("");
   const [pending, setPending] = useState<string | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
 
   // Get current user's employee record
   const currentUserEmployee = useMemo(() => employees.find((e) => e.email === userEmail), [employees, userEmail]);
@@ -137,7 +140,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
   const getWfhForDay = useCallback((day: Date): { wfh: Employee[]; bumped: DayBump[] } => {
     const allocation = allocations.find((a) => isSameWeek(day, a.weekStart, { weekStartsOn: 0 }));
     if (!allocation) return { wfh: [], bumped: [] };
-    const weekDay = format(day, "EEEE").toLowerCase() as WeekDay, dateStr = format(day, "yyyy-MM-dd"), inWeek = new Set(allocation.employees.map((e) => e.id));
+    const weekDay = format(day, "EEEE").toLowerCase() as WeekDay, dateStr = format(day, "yyyy-MM-dd"), inWeek = new Set([...allocation.employees, ...(allocation.away ?? [])].map((e) => e.id));
     const fixedHome = activeEmployees.filter((e) => !inWeek.has(e.id) && (fixedDayKind(e.wfhType) === "office") !== !!e.fixedDays?.includes(weekDay));
     return { wfh: [...allocation.employees, ...fixedHome], bumped: allocation.bumps?.filter((b) => b.date === dateStr) ?? [] };
   }, [allocations, activeEmployees]);
@@ -146,19 +149,19 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
   const getBadgesForDay = useCallback((day: Date): DayBadge[] => {
     const allocation = allocations.find((a) => isSameWeek(day, a.weekStart, { weekStartsOn: 0 }));
     if (!allocation) return [];
-    const { wfh, bumped } = getWfhForDay(day), inWeek = new Set(allocation.employees.map((e) => e.id));
+    const { wfh, bumped } = getWfhForDay(day), inWeek = new Set(allocation.employees.map((e) => e.id)), away = allocation.away ?? [];
     if (calendarMode === "wfh") return [
       ...wfh.map((emp) => { const { Icon, hint } = BADGE_KINDS[badgeKind(emp, inWeek.has(emp.id))]; return { key: emp.id, emp, Icon, hint, inWeek: inWeek.has(emp.id) }; }),
       ...bumped.map((b) => ({ key: `bump-${b.employee.id}`, emp: b.employee, hint: b.forName ? `In office this week · stays home today so ${b.forName} can use their fixed office day` : "In office this week · stays home today to free a seat", dashed: true, suffix: " · 1d", inWeek: false })),
     ];
-    const home = new Set([...wfh.map((e) => e.id), ...bumped.map((b) => b.employee.id)]), seatFrom = new Map(bumped.flatMap((b) => (b.forId ? [[b.forId, b.employee.name] as const] : [])));
+    const home = new Set([...wfh, ...away, ...bumped.map((b) => b.employee)].map((e) => e.id)), seatFrom = new Map(bumped.flatMap((b) => (b.forId ? [[b.forId, b.employee.name] as const] : [])));
     return activeEmployees.filter((e) => !home.has(e.id)).map((emp) => {
       const { Icon, hint } = OFFICE_KINDS[emp.wfhType], from = seatFrom.get(emp.id);
       return { key: emp.id, emp, Icon, hint: from ? `${hint} · using ${from}'s seat (${from} is WFH today)` : hint, dashed: !!from, inWeek: false };
     });
   }, [allocations, activeEmployees, getWfhForDay, calendarMode]);
 
-  const getAssignable = useCallback((allocation: WeekAllocation | null) => employees.filter((e) => e.isActive && e.wfhType !== "permanent_wfh" && !allocation?.employees.some((a) => a.id === e.id)), [employees]);
+  const getAssignable = useCallback((allocation: WeekAllocation | null) => employees.filter((e) => e.isActive && e.wfhType !== "permanent_wfh" && ![...(allocation?.employees ?? []), ...(allocation?.away ?? [])].some((a) => a.id === e.id)), [employees]);
 
   const getAllocationForDay = useCallback((day: Date): WeekAllocation | null => {
     return allocations.find((a) => isSameWeek(day, a.weekStart, { weekStartsOn: 0 })) || null;
@@ -330,6 +333,8 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
   const rotatingEmployees = employees.filter((e) => e.wfhType === "rotating" && e.isActive);
   const employeesWithFixedDays = employees.filter((e) => e.isActive && e.fixedDays && e.fixedDays.length > 0);
   const getEmployeesByDay = (day: WeekDay) => employeesWithFixedDays.filter((e) => e.fixedDays.includes(day));
+  const [viewFrom, viewTo] = [format(calStart, "yyyy-MM-dd"), format(calEnd, "yyyy-MM-dd")];
+  const awayThisMonth = awayPeriods.flatMap((p) => { const emp = employees.find((e) => e.id === p.employeeId); return emp && p.fromWeek <= viewTo && p.toWeek >= viewFrom ? [{ ...p, emp }] : []; });
 
   return (
     <div className="space-y-6">
@@ -402,7 +407,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
                             const canSwap = calendarMode === "wfh" && inWeek && (currentUserEmployee?.id === emp.id || isAdmin) && !isPastWeek;
                             return (
                               <Hint key={key} text={canSwap ? `${hint} · click to swap` : hint}>
-                                <Badge variant={dashed ? "outline" : "secondary"} className={cn("text-[10px] px-1.5 py-0 transition-all duration-150", dashed && "border-dashed", canSwap ? "cursor-pointer hover:ring-2 hover:ring-primary" : "cursor-default", isPastWeek && "opacity-50")} style={dashed ? { borderColor: empColor, color: empColor } : { backgroundColor: `${empColor}33`, color: empColor }} onClick={(e) => { e.stopPropagation(); if (canSwap) handleEmployeeClick(day, emp); }}>
+                                <Badge variant={dashed ? "outline" : "secondary"} className={cn("text-[10px] px-1.5 py-0 transition-all duration-150", dashed && "border-dashed", canSwap ? "cursor-pointer hover:ring-2 hover:ring-primary" : "cursor-default", isPastWeek && "opacity-50", focusId && (focusId === emp.id ? "ring-2 ring-offset-1 ring-offset-background scale-105 opacity-100" : "opacity-20"))} style={{ ...(dashed ? { borderColor: empColor } : { backgroundColor: `${empColor}33` }), color: empColor, ...(focusId === emp.id && { ["--tw-ring-color" as string]: empColor }) }} onClick={(e) => { e.stopPropagation(); if (canSwap) handleEmployeeClick(day, emp); }}>
                                   {Icon && <Icon className="inline h-2.5 w-2.5 opacity-70" />}{emp.name}{suffix}
                                 </Badge>
                               </Hint>
@@ -473,14 +478,31 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
           {rotatingEmployees.map((emp) => {
             const empColor = employeeColorMap.get(emp.id) || "#6366F1";
             return (
-              <Badge key={emp.id} variant="secondary" className="text-[10px] px-1.5 py-0" style={{ backgroundColor: `${empColor}33`, color: empColor }}>
-                {emp.name}
-              </Badge>
+              <button key={emp.id} type="button" aria-pressed={focusId === emp.id} title={focusId === emp.id ? "Click to clear highlight" : `Highlight ${emp.name} in calendar`} onClick={() => setFocusId((id) => (id === emp.id ? null : emp.id))}>
+                <Badge variant="secondary" className={cn("text-[10px] px-1.5 py-0 cursor-pointer transition-all duration-150 hover:scale-105", focusId && (focusId === emp.id ? "ring-2 ring-offset-1 ring-offset-background" : "opacity-40"))} style={{ backgroundColor: `${empColor}33`, color: empColor, ["--tw-ring-color" as string]: empColor }}>
+                  {emp.name}
+                </Badge>
+              </button>
             );
           })}
         </div>
         <span>Showing {calendarMode === "wfh" ? "who's WFH" : "who's in office"} for {format(currentDate, "MMMM yyyy")} (Mon – Fri) · switch from the profile menu</span>
       </div>
+
+      {awayThisMonth.length > 0 && (
+        <div data-tour="away" className="border-t pt-4 animate-in fade-in duration-500">
+          <h3 className="text-sm font-medium mb-2 text-muted-foreground">Away (not counted in office seats)</h3>
+          <div className="flex flex-wrap gap-3">
+            {awayThisMonth.map((p) => (
+              <div key={p.id} className="flex items-center gap-2 bg-card px-3 py-1.5 rounded-md border transition-all duration-200 hover:border-primary/50">
+                <Plane className="h-3.5 w-3.5 text-amber-400" />
+                <span className="text-sm" style={{ color: employeeColorMap.get(p.emp.id) }}>{p.emp.name}</span>
+                <span className="text-xs text-muted-foreground">{awaySpan(p)}{p.reason && ` · ${p.reason}`}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {employeesWithFixedDays.length > 0 && (
         <div data-tour="fixed-days" className="border-t pt-4 space-y-3 animate-in fade-in duration-500">

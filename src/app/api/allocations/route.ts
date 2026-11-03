@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAllocationsForMonth, generateAllocations, notifyScheduleChanges } from "@/lib/allocation-engine";
+import { getAllocationsForMonth, generateSchedule, resetSchedule, notifyScheduleChanges } from "@/lib/allocation-engine";
 import { isAdmin } from "@/lib/auth-utils";
 
 export async function GET(request: NextRequest) {
@@ -19,8 +19,9 @@ export async function POST(request: NextRequest) {
   try {
     if (!(await isAdmin())) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     const body = await request.json();
-    const { weeksCount = 20 } = body;
-    await notifyScheduleChanges(await generateAllocations(new Date(), weeksCount), "admin regenerated the schedule");
+    const { weeksCount = 20, mode } = body;
+    const reset = mode === "reset";
+    await notifyScheduleChanges(await (reset ? resetSchedule(weeksCount) : generateSchedule(weeksCount)), reset ? "admin reset the schedule from this week" : "admin regenerated the schedule");
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "Failed to generate allocations" }, { status: 500 });

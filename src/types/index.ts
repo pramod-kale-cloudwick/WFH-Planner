@@ -31,6 +31,15 @@ export interface WeekAllocation {
   employees: Employee[];
   swaps?: SwapInfo[];
   bumps?: DayBump[];
+  away?: Employee[];
+}
+
+export interface AwayPeriod {
+  id: string;
+  employeeId: string;
+  fromWeek: string;
+  toWeek: string;
+  reason?: string;
 }
 
 export interface DayBump {
