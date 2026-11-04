@@ -53,6 +53,8 @@ const OFFICE_KINDS: Record<WfhType, { Icon: LucideIcon; short: string; hint: str
   permanent_wfo: { Icon: Building2, short: "Permanent WFO", hint: "Permanent WFO · in office" },
 };
 type DayBadge = { key: string; emp: Employee; Icon?: LucideIcon; hint: string; dashed?: boolean; suffix?: string; inWeek: boolean };
+const HIDDEN_TYPE = { wfh: "permanent_wfh", office: "permanent_wfo" } as const;
+const LEGEND = { wfh: Object.values(BADGE_KINDS).filter((k) => k !== BADGE_KINDS.wfh), office: Object.values(OFFICE_KINDS).filter((k) => k !== OFFICE_KINDS.permanent_wfo) };
 
 function Hint({ text, children }: { text: string; children: ReactNode }) {
   return <Tooltip><TooltipTrigger render={<span className="inline-flex" />}>{children}</TooltipTrigger><TooltipContent>{text}</TooltipContent></Tooltip>;
@@ -384,7 +386,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
               const isCurrentMonth = isSameMonth(day, currentDate);
               const isToday = isSameDay(day, today);
               const weekend = isWeekend(day);
-              const badges = getBadgesForDay(day);
+              const allBadges = getBadgesForDay(day), badges = allBadges.filter((b) => b.emp.wfhType !== HIDDEN_TYPE[calendarMode]);
               const allocation = getAllocationForDay(day);
               const currentWeekStart = startOfWeek(today, { weekStartsOn: 0 });
               const dayWeekStart = startOfWeek(day, { weekStartsOn: 0 });
@@ -398,7 +400,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
                       {hasAnnotations && <MessageCircle className="absolute top-1 right-1 h-3.5 w-3.5 text-yellow-400" fill="currentColor" />}
                       <div className={cn("flex items-baseline gap-1.5 text-sm font-semibold mb-1", !isCurrentMonth && "text-muted-foreground/50", weekend && "text-muted-foreground/40")}>
                         {format(day, "d")}
-                        {calendarMode === "office" && !weekend && isCurrentMonth && allocation && settings && <span className={cn("text-[10px] font-normal", badges.length > settings.availableSeats ? "text-destructive" : "text-muted-foreground")}>{badges.length}/{settings.availableSeats} seats</span>}
+                        {calendarMode === "office" && !weekend && isCurrentMonth && allocation && settings && <span className={cn("text-[10px] font-normal", allBadges.length > settings.availableSeats ? "text-destructive" : "text-muted-foreground")}>{allBadges.length}/{settings.availableSeats} seats</span>}
                       </div>
                       {!weekend && isCurrentMonth && badges.length > 0 && (
                         <div className="flex flex-wrap gap-1">
@@ -467,7 +469,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
       )}
 
       <div data-tour="icon-key" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        {Object.values(calendarMode === "wfh" ? BADGE_KINDS : OFFICE_KINDS).map(({ Icon, short }) => <span key={short} className="inline-flex items-center gap-1"><Icon className="h-3 w-3" />{short}</span>)}
+        {LEGEND[calendarMode].map(({ Icon, short }) => <span key={short} className="inline-flex items-center gap-1"><Icon className="h-3 w-3" />{short}</span>)}
         {calendarMode === "wfh"
           ? <span className="inline-flex items-center gap-1"><span className="rounded-full border border-dashed border-muted-foreground px-1.5 text-[10px]">Name · 1d</span>Gave up seat for the day</span>
           : <span className="inline-flex items-center gap-1"><span className="rounded-full border border-dashed border-muted-foreground px-1.5 text-[10px]">Name</span>Using a seat freed by a 1-day WFH</span>}
@@ -486,7 +488,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
             );
           })}
         </div>
-        <span>Showing {calendarMode === "wfh" ? "who's WFH" : "who's in office"} for {format(currentDate, "MMMM yyyy")} (Mon – Fri) · switch from the profile menu</span>
+        <span>Showing {calendarMode === "wfh" ? "who's WFH" : "who's in office"} for {format(currentDate, "MMMM yyyy")} (Mon – Fri) · Permanent {calendarMode === "wfh" ? "WFH" : "WFO"} hidden · switch from the profile menu</span>
       </div>
 
       {awayThisMonth.length > 0 && (
