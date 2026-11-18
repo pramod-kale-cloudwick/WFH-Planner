@@ -53,6 +53,7 @@ const OFFICE_KINDS: Record<PlanType, { Icon: LucideIcon; short: string; hint: st
   permanent_wfo: { Icon: Building2, short: "Permanent WFO", hint: "Permanent WFO · in office" },
 };
 type DayBadge = { key: string; emp: Employee; Icon?: LucideIcon; hint: string; dashed?: boolean; suffix?: string; inWeek: boolean };
+const MODES = [{ mode: "wfh", label: "WFH", Icon: House }, { mode: "office", label: "In office", Icon: Building2 }] as const;
 const HIDDEN_TYPE = { wfh: "permanent_wfh", office: "permanent_wfo" } as const;
 const LEGEND = { wfh: Object.values(BADGE_KINDS).filter((k) => k !== BADGE_KINDS.wfh), office: Object.values(OFFICE_KINDS).filter((k) => k !== OFFICE_KINDS.permanent_wfo) };
 
@@ -71,7 +72,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const { employees, isLoading: empLoading, mutate: mutateEmployees } = useEmployees();
-  const [calendarMode] = useCalendarMode();
+  const [calendarMode, setCalendarMode] = useCalendarMode();
   const { settings } = useSettings();
   const { allocations, isLoading: allocLoading, mutate: mutateAllocations } = useAllocations(currentDate.getFullYear(), currentDate.getMonth());
   const { away: awayPeriods } = useAway();
@@ -347,6 +348,13 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
           <Button variant="outline" size="icon" className="transition-transform duration-200 hover:scale-105 active:scale-95" onClick={() => setCurrentDate(addMonths(currentDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
           {!isSameMonth(currentDate, today) && <Button variant="outline" size="sm" className="ml-2 transition-all duration-200 hover:scale-105 active:scale-95" onClick={() => setCurrentDate(new Date())}><CalendarDays className="h-4 w-4 mr-1" />Today</Button>}
         </div>
+        <div data-tour="calendar-mode" role="radiogroup" aria-label="Calendar view" className="inline-flex rounded-lg border border-foreground/15 bg-muted/40 p-0.5">
+          {MODES.map(({ mode, label, Icon }) => (
+            <button key={mode} type="button" role="radio" aria-checked={calendarMode === mode} onClick={() => setCalendarMode(mode)} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary", calendarMode === mode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+              <Icon className="h-4 w-4" />{label}
+            </button>
+          ))}
+        </div>
         {isAdmin && (
           <AlertDialog>
             <AlertDialogTrigger data-tour="generate" disabled={loading || pending === "generate"} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 disabled:pointer-events-none disabled:opacity-50">
@@ -488,7 +496,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
             );
           })}
         </div>
-        <span>Showing {calendarMode === "wfh" ? "who's WFH" : "who's in office"} for {format(currentDate, "MMMM yyyy")} (Mon – Fri) · Permanent {calendarMode === "wfh" ? "WFH" : "WFO"} hidden · switch from the profile menu</span>
+        <span>Showing {calendarMode === "wfh" ? "who's WFH" : "who's in office"} for {format(currentDate, "MMMM yyyy")} (Mon – Fri) · Permanent {calendarMode === "wfh" ? "WFH" : "WFO"} hidden</span>
       </div>
 
       {awayThisMonth.length > 0 && (

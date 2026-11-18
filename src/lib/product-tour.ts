@@ -57,7 +57,7 @@ const STEPS: DriveStep[] = [
         "A name on a day = working from home that day.",
         "No name = in office that day.",
         "Hover any name to see why they're home.",
-        "Switch to <b>who's in office</b> from the profile menu; it also shows seats used per day (red = over capacity).",
+        "Switch to <b>In office</b> with the toggle above the calendar; it also shows seats used per day (red = over capacity).",
         "Away people are kept out of the cells and listed below the calendar.",
         "Click your rotation-week name to swap that week.",
         "Click any day to add notes. Admins can also assign WFH there.",
