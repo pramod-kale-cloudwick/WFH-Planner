@@ -50,27 +50,26 @@ async function loadContext(): Promise<Ctx> {
 
 const awayIn = (ctx: Ctx, weekStart: string) => new Set(ctx.away.filter((a) => a.fromWeek <= weekStart && weekStart <= a.toWeek).map((a) => a.employeeId));
 const officeHeadcount = (ctx: Ctx, wfh: Set<string>, away: Set<string>) => [...ctx.rotating, ...ctx.wfo].filter((e) => !wfh.has(e.id) && !away.has(e.id)).length;
+const fixedOn = (ctx: Ctx, day: WeekDay) => (e: Emp) => ctx.fixed.get(e.id)?.includes(day) ?? false;
+// Office-goers skip their fixed WFH days; permanent-WFH employees come in on their fixed office days
+const dayHeadcount = (ctx: Ctx, day: WeekDay, wfh: Set<string>, away: Set<string>) => { const fx = fixedOn(ctx, day); return [...ctx.rotating, ...ctx.wfo].filter((e) => !wfh.has(e.id) && !away.has(e.id) && !fx(e)).length + ctx.permWfh.filter((e) => fx(e) && !away.has(e.id)).length; };
 
 /**
- * Permanent-WFH employees come in on their fixed office days; office-going rotating and permanent-WFO employees stay home on their fixed WFH days.
- * When that overflows seats, the in-office rotating employees with the fewest past bumps (alphabetical tie-break) get that single day as WFH instead.
- * Only resolves fixed-day overflow; an admin-forced overflow is left as is.
+ * Any weekday over capacity gives the in-office rotating employees with the fewest past bumps (alphabetical tie-break) that single day as WFH.
+ * Bumps are paired with a permanent-WFH comer when one is the reason for the overflow.
  */
 function planBumps(ctx: Ctx, allocationId: string, weekStart: string, wfhIds: string[]) {
-  const wfh = new Set(wfhIds), away = awayIn(ctx, weekStart), present = (e: Emp) => !wfh.has(e.id) && !away.has(e.id);
-  const inOffice = ctx.rotating.filter(present), officeGoers = [...inOffice, ...ctx.wfo.filter(present)];
-  const base = officeHeadcount(ctx, wfh, away);
+  const wfh = new Set(wfhIds), away = awayIn(ctx, weekStart);
+  const inOffice = ctx.rotating.filter((e) => !wfh.has(e.id) && !away.has(e.id));
   const rows: (typeof dayBumps.$inferInsert)[] = [];
   WEEKDAYS.forEach((day, i) => {
-    const hasFixed = (e: Emp) => ctx.fixed.get(e.id)?.includes(day) ?? false;
-    const comers = ctx.permWfh.filter((e) => hasFixed(e) && !away.has(e.id));
-    // Office-goers on a fixed WFH day free their seat
-    const overflow = Math.min(comers.length, base - officeGoers.filter(hasFixed).length + comers.length - ctx.seats);
+    const hasFixed = fixedOn(ctx, day), comers = ctx.permWfh.filter((e) => hasFixed(e) && !away.has(e.id));
+    const overflow = dayHeadcount(ctx, day, wfh, away) - ctx.seats;
     if (overflow <= 0) return;
     const date = toDay(addDays(parseISO(weekStart), i + 1));
     const byFewestBumps = (a: Emp, b: Emp) => (ctx.bumpCount.get(a.id) ?? 0) - (ctx.bumpCount.get(b.id) ?? 0) || (ctx.rank.get(a.id) ?? 0) - (ctx.rank.get(b.id) ?? 0);
     inOffice.filter((e) => !hasFixed(e)).sort(byFewestBumps).slice(0, overflow).forEach((e, k) => {
-      rows.push({ id: nanoid(), allocationId, date, employeeId: e.id, forEmployeeId: comers[k].id });
+      rows.push({ id: nanoid(), allocationId, date, employeeId: e.id, forEmployeeId: comers[k]?.id });
       ctx.bumpCount.set(e.id, (ctx.bumpCount.get(e.id) ?? 0) + 1);
     });
   });
@@ -79,7 +78,7 @@ function planBumps(ctx: Ctx, allocationId: string, weekStart: string, wfhIds: st
 
 /**
  * Rebuilds WFH weeks from `startDate` for `weeksCount` weeks and returns who gained/lost WFH weeks.
- * - Seats are reduced by permanent-WFO employees; overflow of rotating employees goes WFH.
+ * - Rotating employees go WFH only while every weekday stays at full seats (fixed days counted); extra heads on a day get a 1-day bump.
  * - Rotation is a pure alphabetical cycle: each week continues after the alphabetically-last person of the
  *   previous week's block, so joiners/leavers fall into place by name (a,b,d,e + c => a,b,c,d,e).
  * - Swapped/edited (override) weeks and weeks up to FREEZE_WEEKS ahead are kept; overrides consume a normal slot.
@@ -128,11 +127,16 @@ export async function generateAllocations(startDate: Date, weeksCount: number, {
   const skipSlot = () => { if (n) pointer = (pointer + wfhPerWeek) % n; };
   const applyLocked = (weekStart: string, w: { isOverride: boolean; empIds: string[] }) => (w.isOverride ? skipSlot() : continueAfter(weekStart, w.empIds));
   for (const [weekStart, w] of byWeek) if (weekStart < weeks[0].start) applyLocked(weekStart, w);
-  // Walks the ring from the pointer: away people consume their turn (lapse), each absent office-goer means one fewer WFH pick
+  // Walks the ring from the pointer, away people consume their turn (lapse); stops before a pick would leave any weekday below seats, so that person leads next week
   const pickWeek = (weekStart: string) => {
-    const away = awayIn(ctx, weekStart), need = Math.min(n, Math.max(0, officeHeadcount(ctx, new Set(), away) - ctx.seats)), picked: string[] = [];
-    for (let s = 0; s < n && picked.length < need; s++) { const e = rotating[pointer]; pointer = (pointer + 1) % n; if (!away.has(e.id)) picked.push(e.id); }
-    return picked;
+    const away = awayIn(ctx, weekStart), picked = new Set<string>();
+    const filled = () => WEEKDAYS.every((day) => dayHeadcount(ctx, day, picked, away) >= ctx.seats);
+    for (let s = 0; s < n; s++) {
+      const e = rotating[pointer];
+      if (!away.has(e.id)) { picked.add(e.id); if (!filled()) { picked.delete(e.id); break; } }
+      pointer = (pointer + 1) % n;
+    }
+    return [...picked];
   };
 
   const changes = new Map<string, { before: Set<string>; after: Set<string> }>();
