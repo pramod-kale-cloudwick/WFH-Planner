@@ -24,7 +24,9 @@ export async function POST(request: NextRequest) {
 
     const { errors, data, valid } = validateEmployee({ ...(await request.json()), email: undefined });
     if (!valid) return NextResponse.json({ error: firstError(errors), errors }, { status: 400 });
-    const { name, designation, wfhType, fixedDays, color } = data as Required<typeof data>;
+    const { name, designation, fixedDays, color } = data as Required<typeof data>;
+    // Spectator needs admin approval; until then they rotate like everyone else
+    const spectatorRequested = data.wfhType === "spectator", wfhType = spectatorRequested ? "rotating" : data.wfhType!;
 
     const allAdmins = await db.select({ id: employees.id, isActive: employees.isActive }).from(employees).where(eq(employees.isAdmin, true));
     const isFirstUser = allAdmins.length === 0, admins = allAdmins.filter((a) => a.isActive);
@@ -46,11 +48,12 @@ export async function POST(request: NextRequest) {
       rotationOrder: nextOrder,
       isActive: true,
       isAdmin: isFirstUser,
+      spectatorRequested,
       color: assignedColor,
     }).returning();
 
     // Re-planning is left to an admin so back-to-back onboardings don't each reshuffle the schedule
-    if (admins.length) await db.insert(notifications).values(admins.map((a) => ({ id: nanoid(), employeeId: a.id, message: `${name} joined the team (${WFH_TYPE_LABELS[wfhType]}). Click Generate Schedule to include them.` })));
+    if (admins.length) await db.insert(notifications).values(admins.map((a) => ({ id: nanoid(), employeeId: a.id, message: spectatorRequested ? `${name} joined and requested Spectator access. Approve or reject it from Employees.` : `${name} joined the team (${WFH_TYPE_LABELS[wfhType]}). Click Generate Schedule to include them.` })));
     return NextResponse.json({ ...newEmployee[0], fixedDays: JSON.parse(newEmployee[0].fixedDays || "[]"), isFirstUser }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed to complete onboarding" }, { status: 500 });

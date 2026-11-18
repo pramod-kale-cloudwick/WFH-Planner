@@ -14,6 +14,7 @@ const TYPE_LABELS: Record<WfhType, { label: string; hint: string }> = {
   rotating: { label: "Rotating", hint: "Full week WFH on your rotation turn, plus fixed WFH days (if picked below) on office weeks" },
   permanent_wfh: { label: "Permanent WFH", hint: "Works from home, except on fixed office days (if picked below)" },
   permanent_wfo: { label: "Permanent WFO", hint: "Works from office, except on fixed WFH days (if picked below)" },
+  spectator: { label: "Spectator", hint: "View only. Not part of the plan and never takes a seat" },
 };
 
 const DAY_COPY = {
@@ -28,11 +29,12 @@ export function FieldError({ id, message }: { id?: string; message?: string }) {
 }
 
 /** WFH type, badge colour and fixed days, with type-aware rules shared by onboarding and the employee form. */
-export function PreferenceFields({ value, onChange, errors, typeNotice }: { value: Preferences; onChange: (patch: Partial<Preferences>) => void; errors: FieldErrors; typeNotice?: ReactNode }) {
+export function PreferenceFields({ value, onChange, errors, typeNotice, needsApproval = true }: { value: Preferences; onChange: (patch: Partial<Preferences>) => void; errors: FieldErrors; typeNotice?: ReactNode; needsApproval?: boolean }) {
   const { wfhType, fixedDays, color } = value, kind = fixedDayKind(wfhType), atLimit = fixedDays.length >= WEEKDAY_LIST.length - 1;
+  const hint = wfhType === "spectator" && needsApproval ? `${TYPE_LABELS.spectator.hint}. Needs admin approval; you stay Rotating until then` : TYPE_LABELS[wfhType].hint;
   const copy = DAY_COPY[kind];
   // Fixed days flip meaning between office and WFH, so switching across kinds clears them
-  const setType = (type: WfhType) => onChange({ wfhType: type, ...(fixedDayKind(type) !== kind && { fixedDays: [] }) });
+  const setType = (type: WfhType) => onChange({ wfhType: type, ...((type === "spectator" || fixedDayKind(type) !== kind) && { fixedDays: [] }) });
   const toggleDay = (day: WeekDay) => onChange({ fixedDays: fixedDays.includes(day) ? fixedDays.filter((d) => d !== day) : WEEKDAY_LIST.filter((d) => d === day || fixedDays.includes(d)) });
 
   return (
@@ -45,7 +47,7 @@ export function PreferenceFields({ value, onChange, errors, typeNotice }: { valu
             {(Object.keys(TYPE_LABELS) as WfhType[]).map((t) => <SelectItem key={t} value={t}>{TYPE_LABELS[t].label}</SelectItem>)}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">{TYPE_LABELS[wfhType].hint}</p>
+        <p className="text-xs text-muted-foreground">{hint}</p>
         <FieldError message={errors.wfhType} />
         {typeNotice}
       </div>
@@ -63,7 +65,7 @@ export function PreferenceFields({ value, onChange, errors, typeNotice }: { valu
         </div>
         <FieldError message={errors.color} />
       </div>
-      <div className="space-y-2">
+      {wfhType !== "spectator" && <div className="space-y-2">
         <Label>{copy.label} <span className="text-muted-foreground text-xs">({copy.sub})</span></Label>
         <div className="flex flex-wrap gap-2">
           {WEEKDAY_LIST.map((day) => {
@@ -77,7 +79,7 @@ export function PreferenceFields({ value, onChange, errors, typeNotice }: { valu
         </div>
         <p className="text-xs text-muted-foreground">{atLimit ? `Max 4 days. ${copy.limit}` : "Pick up to 4 days."}</p>
         <FieldError message={errors.fixedDays} />
-      </div>
+      </div>}
     </>
   );
 }

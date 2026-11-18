@@ -17,7 +17,7 @@ import { cn, workWeek } from "@/lib/utils";
 import { fixedDayKind, WEEKDAY_LIST } from "@/lib/employee-validation";
 import { useEmployees, useAllocations, useAnnotations, useCalendarMode, useSettings, useAway } from "@/lib/hooks";
 import { awaySpan } from "@/components/away-dialog";
-import type { WeekAllocation, Employee, WeekDay, DateAnnotation, DayBump, WfhType } from "@/types";
+import type { WeekAllocation, Employee, WeekDay, DateAnnotation, DayBump, PlanType } from "@/types";
 
 const DEFAULT_COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F97316", "#EC4899", "#06B6D4", "#EAB308", "#EF4444", "#6366F1", "#14B8A6", "#F59E0B", "#84CC16"];
 
@@ -47,7 +47,7 @@ const BADGE_KINDS = {
   wfo: { Icon: Building2, short: "Permanent WFO · fixed WFH day", hint: "Permanent WFO · fixed WFH day" },
 } as const;
 const badgeKind = (emp: Employee, inWeek: boolean): keyof typeof BADGE_KINDS => (inWeek ? "week" : emp.wfhType === "permanent_wfh" ? "wfh" : emp.wfhType === "permanent_wfo" ? "wfo" : "fixed");
-const OFFICE_KINDS: Record<WfhType, { Icon: LucideIcon; short: string; hint: string }> = {
+const OFFICE_KINDS: Record<PlanType, { Icon: LucideIcon; short: string; hint: string }> = {
   rotating: { Icon: Repeat, short: "Rotating · office week", hint: "Rotating · in office this week" },
   permanent_wfh: { Icon: House, short: "Permanent WFH · fixed office day", hint: "Permanent WFH · in office on their fixed office day" },
   permanent_wfo: { Icon: Building2, short: "Permanent WFO", hint: "Permanent WFO · in office" },
@@ -136,7 +136,7 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
     return eachDayOfInterval({ start: calStart, end: calEnd });
   }, [currentDate]);
 
-  const activeEmployees = useMemo(() => employees.filter((e) => e.isActive), [employees]);
+  const activeEmployees = useMemo(() => employees.filter((e) => e.isActive && e.wfhType !== "spectator"), [employees]);
 
   // WFH-week people are home all week; permanent WFH is home except fixed office days; everyone else is home on fixed WFH days; bumped employees take a WFH slot
   const getWfhForDay = useCallback((day: Date): { wfh: Employee[]; bumped: DayBump[] } => {
@@ -158,12 +158,12 @@ export function CalendarView({ onSwapComplete }: CalendarViewProps) {
     ];
     const home = new Set([...wfh, ...away, ...bumped.map((b) => b.employee)].map((e) => e.id)), seatFrom = new Map(bumped.flatMap((b) => (b.forId ? [[b.forId, b.employee.name] as const] : [])));
     return activeEmployees.filter((e) => !home.has(e.id)).map((emp) => {
-      const { Icon, hint } = OFFICE_KINDS[emp.wfhType], from = seatFrom.get(emp.id);
+      const { Icon, hint } = OFFICE_KINDS[emp.wfhType as PlanType], from = seatFrom.get(emp.id);
       return { key: emp.id, emp, Icon, hint: from ? `${hint} · using ${from}'s seat (${from} is WFH today)` : hint, dashed: !!from, inWeek: false };
     });
   }, [allocations, activeEmployees, getWfhForDay, calendarMode]);
 
-  const getAssignable = useCallback((allocation: WeekAllocation | null) => employees.filter((e) => e.isActive && e.wfhType !== "permanent_wfh" && ![...(allocation?.employees ?? []), ...(allocation?.away ?? [])].some((a) => a.id === e.id)), [employees]);
+  const getAssignable = useCallback((allocation: WeekAllocation | null) => employees.filter((e) => e.isActive && (e.wfhType === "rotating" || e.wfhType === "permanent_wfo") && ![...(allocation?.employees ?? []), ...(allocation?.away ?? [])].some((a) => a.id === e.id)), [employees]);
 
   const getAllocationForDay = useCallback((day: Date): WeekAllocation | null => {
     return allocations.find((a) => isSameWeek(day, a.weekStart, { weekStartsOn: 0 })) || null;

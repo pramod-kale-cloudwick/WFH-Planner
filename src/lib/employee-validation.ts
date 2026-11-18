@@ -1,8 +1,8 @@
 import type { WfhType, WeekDay } from "@/types";
 
 export const WEEKDAY_LIST: WeekDay[] = ["monday", "tuesday", "wednesday", "thursday", "friday"];
-export const WFH_TYPES: WfhType[] = ["rotating", "permanent_wfh", "permanent_wfo"];
-export const WFH_TYPE_LABELS: Record<WfhType, string> = { rotating: "Rotating", permanent_wfh: "Permanent WFH", permanent_wfo: "Permanent WFO" };
+export const WFH_TYPES: WfhType[] = ["rotating", "permanent_wfh", "permanent_wfo", "spectator"];
+export const WFH_TYPE_LABELS: Record<WfhType, string> = { rotating: "Rotating", permanent_wfh: "Permanent WFH", permanent_wfo: "Permanent WFO", spectator: "Spectator" };
 export const LIMITS = { name: 50, designation: 60, email: 254 } as const;
 
 type Field = "name" | "email" | "designation" | "wfhType" | "fixedDays" | "color";
@@ -49,7 +49,8 @@ export function validateEmployee(input: EmployeeInput, { partial = false, curren
   }
 
   const type = data.wfhType ?? currentType ?? "rotating", kind = fixedDayKind(type);
-  if (has("fixedDays")) {
+  if (type === "spectator") data.fixedDays = [];
+  else if (has("fixedDays")) {
     const raw = Array.isArray(input.fixedDays) ? input.fixedDays : [];
     const days = WEEKDAY_LIST.filter((d) => raw.includes(d));
     if (raw.some((d) => !WEEKDAY_LIST.includes(d as WeekDay))) errors.fixedDays = "Pick weekdays only";

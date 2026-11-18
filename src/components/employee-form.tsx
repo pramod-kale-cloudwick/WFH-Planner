@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -16,6 +17,7 @@ const WFH_TYPE_WARNINGS: Record<WfhType, string> = {
   permanent_wfo: "In office except fixed WFH days. Schedule re-plans from the week after next.",
   permanent_wfh: "WFH except fixed office days. Previously picked days are cleared. Schedule re-plans from the week after next.",
   rotating: "Joins the rotation in alphabetical order, keeping fixed WFH days. Schedule re-plans from the week after next.",
+  spectator: "View only, left out of the plan. Fixed days are cleared. Schedule re-plans from the week after next.",
 };
 
 type InitialData = { id: string; name: string; email?: string; designation: string; wfhType: WfhType; fixedDays: WeekDay[]; color?: string };
@@ -31,6 +33,7 @@ interface EmployeeFormProps {
 const toState = (d?: InitialData): FormState => ({ name: d?.name ?? "", email: d?.email ?? "", designation: d?.designation ?? "", wfhType: d?.wfhType ?? "rotating", fixedDays: d?.fixedDays ?? [], color: d?.color ?? "" });
 
 export function EmployeeForm({ onSuccess, initialData, mode = "button", isSelfEdit = false }: EmployeeFormProps) {
+  const { data: session } = useSession();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<FormState>(() => toState(initialData));
@@ -95,7 +98,7 @@ export function EmployeeForm({ onSuccess, initialData, mode = "button", isSelfEd
             <Input id="designation" value={form.designation} onChange={(e) => update({ designation: e.target.value })} placeholder="Software Engineer" maxLength={LIMITS.designation} aria-invalid={!!shown.designation} />
             <FieldError message={shown.designation} />
           </div>
-          <PreferenceFields value={form} onChange={update} errors={shown} typeNotice={wfhTypeChanged && (
+          <PreferenceFields value={form} onChange={update} errors={shown} needsApproval={!session?.user?.isAdmin} typeNotice={wfhTypeChanged && (
             <Alert variant="destructive" className="mt-2 py-2">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription className="text-xs">{WFH_TYPE_WARNINGS[form.wfhType]}</AlertDescription>

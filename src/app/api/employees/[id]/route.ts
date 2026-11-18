@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { employees, allocationEmployees, swapHistory, swapRequests, dateAnnotations, dayBumps, notifications, employeeAway } from "@/lib/schema";
 import { and, eq, ne, or, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { auth } from "@/lib/auth";
 import { rebalanceSchedule } from "@/lib/allocation-engine";
 import { firstError, validateEmployee } from "@/lib/employee-validation";
@@ -10,6 +11,12 @@ const TYPE_CHANGE_MESSAGES: Record<string, string> = {
   permanent_wfo: "You'll always work from office. Future WFH weeks are re-planned (next week stays as is).",
   permanent_wfh: "You'll always work from home. Future weeks are re-planned (next week stays as is).",
   rotating: "You're in the rotation now. Future weeks are re-planned (next week stays as is).",
+  spectator: "You're a spectator now: view only, not part of the plan.",
+};
+
+const notifyAdmins = async (message: string) => {
+  const admins = await db.select({ id: employees.id }).from(employees).where(and(eq(employees.isAdmin, true), eq(employees.isActive, true)));
+  if (admins.length) await db.insert(notifications).values(admins.map((a) => ({ id: nanoid(), employeeId: a.id, message })));
 };
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -28,7 +35,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const canChangeEmail = admin && !isSelf;
     const { errors, data, valid } = validateEmployee({ ...body, email: canChangeEmail ? body.email : undefined }, { partial: true, currentType: emp.wfhType });
     if (!valid) return NextResponse.json({ error: firstError(errors), errors }, { status: 400 });
-    const { name, email, designation, wfhType, fixedDays, color } = data;
+    // Non-admins can't self-assign Spectator; picking it files a request and leaves type + fixed days untouched
+    const requested = !admin && data.wfhType === "spectator" && emp.wfhType !== "spectator";
+    const { name, email, designation, color } = data, wfhType = requested ? undefined : data.wfhType, fixedDays = requested ? undefined : data.fixedDays;
     if (email && (await db.select({ id: employees.id }).from(employees).where(and(sql`lower(${employees.email}) = ${email}`, ne(employees.id, id))).limit(1)).length) return NextResponse.json({ error: "Another employee already uses this email", errors: { email: "Email already in use" } }, { status: 409 });
     const isActive = admin && typeof body.isActive === "boolean" ? body.isActive : undefined;
 
@@ -40,13 +49,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       ...(fixedDays !== undefined && { fixedDays: JSON.stringify(fixedDays) }),
       ...(isActive !== undefined && { isActive }),
       ...(color !== undefined && { color }),
+      ...((requested || wfhType === "spectator") && { spectatorRequested: requested }),
     }).where(eq(employees.id, id)).returning();
+    if (requested && !emp.spectatorRequested) await notifyAdmins(`${updated.name} requested Spectator access. Approve or reject it from Employees.`);
 
     const typeChanged = updated.wfhType !== emp.wfhType;
     if (typeChanged || updated.isActive !== emp.isActive || updated.fixedDays !== emp.fixedDays) {
       await rebalanceSchedule(`${updated.name}'s preferences changed`).catch(console.error);
     }
-    return NextResponse.json({ ...updated, fixedDays: JSON.parse(updated.fixedDays || "[]"), ...(typeChanged && { message: TYPE_CHANGE_MESSAGES[updated.wfhType] }) });
+    return NextResponse.json({ ...updated, fixedDays: JSON.parse(updated.fixedDays || "[]"), ...(requested ? { message: "Spectator request sent. An admin will review it." } : typeChanged && { message: TYPE_CHANGE_MESSAGES[updated.wfhType] }) });
   } catch {
     return NextResponse.json({ error: "Failed to update employee" }, { status: 500 });
   }

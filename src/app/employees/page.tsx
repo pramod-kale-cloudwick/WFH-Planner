@@ -13,8 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, Trash2 } from "lucide-react";
 import type { Employee, WfhType } from "@/types";
 
-const wfhTypeLabels: Record<WfhType, string> = { rotating: "Rotating", permanent_wfh: "Permanent WFH", permanent_wfo: "Permanent WFO" };
-const wfhTypeColors: Record<WfhType, string> = { rotating: "bg-blue-500/20 text-blue-400", permanent_wfh: "bg-green-500/20 text-green-400", permanent_wfo: "bg-orange-500/20 text-orange-400" };
+const wfhTypeLabels: Record<WfhType, string> = { rotating: "Rotating", permanent_wfh: "Permanent WFH", permanent_wfo: "Permanent WFO", spectator: "Spectator" };
+const wfhTypeColors: Record<WfhType, string> = { rotating: "bg-blue-500/20 text-blue-400", permanent_wfh: "bg-green-500/20 text-green-400", permanent_wfo: "bg-orange-500/20 text-orange-400", spectator: "bg-zinc-500/20 text-zinc-400" };
 
 export default function EmployeesPage() {
   const { data: session } = useSession();
@@ -48,6 +48,16 @@ export default function EmployeesPage() {
         } catch { toast.error("Failed to delete employee"); } finally { setDeletingId(null); }
       }},
     });
+  };
+
+  const decideSpectator = async (emp: Employee, approve: boolean) => {
+    setDeletingId(`spectator:${emp.id}`);
+    try {
+      const res = await fetch(`/api/employees/${emp.id}/spectator`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ approve }) });
+      if (!res.ok) { toast.error((await res.json()).error ?? "Failed to update request"); return; }
+      await fetchEmployees();
+      toast.success(approve ? `${emp.name} is now a spectator` : `Declined ${emp.name}'s Spectator request`);
+    } catch { toast.error("Failed to update request"); } finally { setDeletingId(null); }
   };
 
   const formatFixedDays = (days: string[]) => {
@@ -90,6 +100,15 @@ export default function EmployeesPage() {
                     <TableCell>{emp.designation}</TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={wfhTypeColors[emp.wfhType]}>{wfhTypeLabels[emp.wfhType]}</Badge>
+                      {emp.spectatorRequested && (
+                        <div className="mt-1 flex items-center gap-1">
+                          <Badge variant="outline" className="border-dashed text-zinc-400">Spectator requested</Badge>
+                          {isAdmin && <>
+                            <Button size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={deletingId === `spectator:${emp.id}`} onClick={() => decideSpectator(emp, true)}>Approve</Button>
+                            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={deletingId === `spectator:${emp.id}`} onClick={() => decideSpectator(emp, false)}>Reject</Button>
+                          </>}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       {formatFixedDays(emp.fixedDays) ? (
@@ -107,7 +126,7 @@ export default function EmployeesPage() {
                     <TableCell>
                       <div className="flex items-center gap-1">
                         {canEdit(emp) && <EmployeeForm onSuccess={fetchEmployees} initialData={emp} mode="inline" isSelfEdit={emp.email === userEmail} />}
-                        {isAdmin && emp.isActive && <AwayDialog employee={emp} periods={periods} onChange={() => mutateAway()} />}
+                        {isAdmin && emp.isActive && emp.wfhType !== "spectator" && <AwayDialog employee={emp} periods={periods} onChange={() => mutateAway()} />}
                         {isAdmin && emp.email !== userEmail && (
                           <Button variant="ghost" size="icon" disabled={deletingId === emp.id} onClick={() => handleDelete(emp.id, emp.name)} className="h-8 w-8 text-destructive hover:text-destructive">
                             {deletingId === emp.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}

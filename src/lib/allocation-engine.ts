@@ -232,7 +232,7 @@ export async function setWeekMember(weekStartInput: string, employeeId: string, 
 
   const ctx = await loadContext();
   const emp = [...ctx.rotating, ...ctx.wfo, ...ctx.permWfh].find((e) => e.id === employeeId);
-  if (!emp) return { ok: false, status: 404, error: "Active employee not found" };
+  if (!emp) return { ok: false, status: 404, error: "Active planned employee not found" };
   if (emp.wfhType === "permanent_wfh") return { ok: false, status: 400, error: `${emp.name} is always WFH` };
   const away = awayIn(ctx, weekStart);
   if (away.has(employeeId)) return { ok: false, status: 400, error: `${emp.name} is away that week` };

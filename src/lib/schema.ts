@@ -42,11 +42,12 @@ export const employees = sqliteTable("employees", {
   name: text("name").notNull(),
   email: text("email"),
   designation: text("designation").notNull(),
-  wfhType: text("wfh_type", { enum: ["rotating", "permanent_wfh", "permanent_wfo"] }).notNull().default("rotating"),
+  wfhType: text("wfh_type", { enum: ["rotating", "permanent_wfh", "permanent_wfo", "spectator"] }).notNull().default("rotating"),
   fixedDays: text("fixed_days").default("[]"),
   rotationOrder: integer("rotation_order").notNull().default(0),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
+  spectatorRequested: integer("spectator_requested", { mode: "boolean" }).notNull().default(false),
   color: text("color"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });

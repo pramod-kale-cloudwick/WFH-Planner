@@ -1,4 +1,5 @@
-export type WfhType = "rotating" | "permanent_wfh" | "permanent_wfo";
+export type WfhType = "rotating" | "permanent_wfh" | "permanent_wfo" | "spectator";
+export type PlanType = Exclude<WfhType, "spectator">;
 export type WeekDay = "monday" | "tuesday" | "wednesday" | "thursday" | "friday";
 export type FixedDays = WeekDay[];
 
@@ -12,6 +13,7 @@ export interface Employee {
   rotationOrder: number;
   isActive: boolean;
   isAdmin: boolean;
+  spectatorRequested?: boolean;
   color?: string;
   createdAt: Date;
 }
